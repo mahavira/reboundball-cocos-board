@@ -1,7 +1,8 @@
 import { BoardPathPredictor } from '../board-prediction/BoardPathPredictor.ts';
+import { coordKey } from '../shared/helpers.ts';
 import type { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import type { BoardRuntime } from '../board-runtime/BoardRuntime.ts';
-import type { BoardEntityChangeEvent } from '../shared/types.ts';
+import type { BoardEntityChangeEvent, GridCoord } from '../shared/types.ts';
 
 interface BoardPresentationRefresherOptions {
   runtime: BoardRuntime;
@@ -10,8 +11,9 @@ interface BoardPresentationRefresherOptions {
 }
 
 interface PendingPresentationRefresh {
-  needsEntityRefresh: boolean;
+  needsFullEntityRefresh: boolean;
   needsPredictionRefresh: boolean;
+  changedCoordsByKey: Map<string, GridCoord>;
 }
 
 /**
@@ -25,8 +27,9 @@ export class BoardPresentationRefresher {
   private readonly renderer: BoardRenderer;
   private readonly getActiveBallIds: () => Set<string>;
   private readonly pendingRefresh: PendingPresentationRefresh = {
-    needsEntityRefresh: false,
+    needsFullEntityRefresh: false,
     needsPredictionRefresh: false,
+    changedCoordsByKey: new Map(),
   };
   private predictionPathPredictor!: BoardPathPredictor;
 
@@ -37,7 +40,13 @@ export class BoardPresentationRefresher {
   }
 
   handleEntityChange(event: BoardEntityChangeEvent): void {
-    this.pendingRefresh.needsEntityRefresh = true;
+    if (event.kind === 'reset') {
+      this.pendingRefresh.needsFullEntityRefresh = true;
+      this.pendingRefresh.changedCoordsByKey.clear();
+    } else {
+      this.collectChangedCoords(event.changedCoords);
+    }
+
     if (event.requiresPredictionRefresh) {
       this.pendingRefresh.needsPredictionRefresh = true;
     }
@@ -45,16 +54,19 @@ export class BoardPresentationRefresher {
 
   /** 把 runtime 发布的布局变化统一收口到帧循环里刷新。 */
   flushPendingPresentationRefreshes(): void {
-    if (this.pendingRefresh.needsEntityRefresh) {
+    if (this.pendingRefresh.needsFullEntityRefresh) {
       this.refreshEntityPresentation();
+    } else if (this.pendingRefresh.changedCoordsByKey.size > 0) {
+      this.refreshChangedEntityPresentation();
     }
 
     if (this.pendingRefresh.needsPredictionRefresh) {
       this.refreshPredictionPresentation();
     }
 
-    this.pendingRefresh.needsEntityRefresh = false;
+    this.pendingRefresh.needsFullEntityRefresh = false;
     this.pendingRefresh.needsPredictionRefresh = false;
+    this.pendingRefresh.changedCoordsByKey.clear();
   }
 
   /**
@@ -73,9 +85,22 @@ export class BoardPresentationRefresher {
     this.syncIdleBallNodes();
   }
 
+  private collectChangedCoords(coords: GridCoord[]): void {
+    for (const coord of coords) {
+      this.pendingRefresh.changedCoordsByKey.set(coordKey(coord), coord);
+    }
+  }
+
   /** 用最新运行时实体快照重建实体层。 */
   private refreshEntityPresentation(): void {
     this.renderer.rebuildEntityLayer(this.runtime.getEntities());
+  }
+
+  /** 用最新运行时实体快照刷新发生变化的格子。 */
+  private refreshChangedEntityPresentation(): void {
+    for (const coord of this.pendingRefresh.changedCoordsByKey.values()) {
+      this.renderer.updateEntityNode(coord, this.runtime.getEntityAt(coord));
+    }
   }
 
   /**
