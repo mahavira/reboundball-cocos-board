@@ -9,6 +9,8 @@ import type {
   UiPoint,
 } from '../shared/types.ts';
 
+const HIDDEN_PREVIEW_KEY = 'hidden';
+
 type ActiveDragContext = {
   slotIndex: number;
   item: BoardDragItemDefinition;
@@ -30,6 +32,7 @@ export class ShopDragController {
   private readonly placementService: BoardPlacementService;
   private readonly onPlacementSuccess: (slotIndex: number) => void;
   private activeDragContext: ActiveDragContext | null = null;
+  private lastPreviewFeedbackKey: string | null = null;
 
   constructor(options: ShopDragControllerOptions) {
     this.host = options.host;
@@ -52,6 +55,7 @@ export class ShopDragController {
       previewHandle,
       source,
     };
+    this.lastPreviewFeedbackKey = null;
 
     this.host.updateDragPreviewPosition(previewHandle, uiPoint);
     this.updatePreviewFeedback(item, uiPoint);
@@ -111,7 +115,7 @@ export class ShopDragController {
       && this.host.isRecycleUiPoint(uiPoint)
       && this.host.canRecyclePlacedEntity(this.activeDragContext.source)
     ) {
-      this.host.clearPlacementHighlight();
+      this.clearPreviewFeedback();
       return;
     }
 
@@ -124,6 +128,13 @@ export class ShopDragController {
   }
 
   private applyPreviewFeedback(preview: BoardPlacementPreview): void {
+    const feedbackKey = this.createPreviewFeedbackKey(preview);
+    if (feedbackKey === this.lastPreviewFeedbackKey) {
+      return;
+    }
+
+    this.lastPreviewFeedbackKey = feedbackKey;
+
     if (!preview.coord || preview.state === 'outside') {
       this.host.clearPlacementHighlight();
       return;
@@ -137,13 +148,31 @@ export class ShopDragController {
     this.host.showPlacementHighlight(preview.coord, preview.state);
   }
 
+  private clearPreviewFeedback(): void {
+    if (this.lastPreviewFeedbackKey === HIDDEN_PREVIEW_KEY) {
+      return;
+    }
+
+    this.host.clearPlacementHighlight();
+    this.lastPreviewFeedbackKey = HIDDEN_PREVIEW_KEY;
+  }
+
+  private createPreviewFeedbackKey(preview: BoardPlacementPreview): string {
+    if (!preview.coord || preview.state === 'outside') {
+      return HIDDEN_PREVIEW_KEY;
+    }
+
+    return `${preview.coord.row},${preview.coord.col}:${preview.state}`;
+  }
+
   private teardownActiveDrag(): void {
     if (!this.activeDragContext) {
       return;
     }
 
     this.host.destroyDragPreview(this.activeDragContext.previewHandle);
-    this.host.clearPlacementHighlight();
+    this.clearPreviewFeedback();
+    this.lastPreviewFeedbackKey = null;
     this.activeDragContext = null;
   }
 }
