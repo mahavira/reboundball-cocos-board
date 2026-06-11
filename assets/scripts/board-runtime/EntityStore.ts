@@ -52,6 +52,6 @@ export class EntityStore {
   }
 
   private createEntityId(): string {
-    return `entity-${++this.entityIdSeed}`;
+    return `weapon-${++this.entityIdSeed}`;
   }
 }
