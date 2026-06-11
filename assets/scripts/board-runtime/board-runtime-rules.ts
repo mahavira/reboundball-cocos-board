@@ -53,7 +53,7 @@ export function getWeaponTailDirections(spec: WeaponEntitySpec): Direction[] {
 }
 
 /** 将实体放置规格转换为运行时状态。 */
-export function createEntityState(spec: EntitySpec, index: number): EntityState {
+export function createEntityState(spec: EntitySpec, entityId: string): EntityState {
   switch (spec.kind) {
     case 'turner':
       return {
@@ -103,7 +103,7 @@ export function createEntityState(spec: EntitySpec, index: number): EntityState 
     case 'weapon':
       return {
         kind: 'weapon',
-        id: `weapon-${index}`,
+        id: entityId,
         coord: cloneCoord(spec.coord),
         weaponType: spec.weaponType,
         level: spec.level ?? 1,
