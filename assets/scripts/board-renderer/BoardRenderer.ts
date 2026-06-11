@@ -61,6 +61,7 @@ export class BoardRenderer {
   private predictionPathNode: Node | null = null;
   private predictionPathGraphics: Graphics | null = null;
   private readonly ballNodeMap = new Map<string, Node>();
+  private readonly currentBallIds = new Set<string>();
   private readonly entityNodeMap = new Map<string, Node>();
 
   constructor(rootNode: Node) {
@@ -262,10 +263,13 @@ export class BoardRenderer {
   }
 
   private removeStaleBallNodes(ballStates: BallRenderState[]): void {
-    const currentBallIds = new Set(ballStates.map((ball) => ball.ballId));
+    this.currentBallIds.clear();
+    for (const ball of ballStates) {
+      this.currentBallIds.add(ball.ballId);
+    }
 
     for (const [ballId, node] of this.ballNodeMap.entries()) {
-      if (currentBallIds.has(ballId)) {
+      if (this.currentBallIds.has(ballId)) {
         continue;
       }
       node.destroy();
