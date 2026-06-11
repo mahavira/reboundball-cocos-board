@@ -58,6 +58,8 @@ export class BoardRenderer {
   private boardBallLayerNode!: Node;
   private boardDragHighlightLayerNode!: Node;
   private dragHighlightNode: Node | null = null;
+  private predictionPathNode: Node | null = null;
+  private predictionPathGraphics: Graphics | null = null;
   private readonly ballNodeMap = new Map<string, Node>();
   private readonly entityNodeMap = new Map<string, Node>();
 
@@ -126,18 +128,29 @@ export class BoardRenderer {
 
   /** 清空共享预测路径，避免布局变化后残留旧轨迹。 */
   clearPredictionPath(): void {
-    this.boardPredictionLayerNode.destroyAllChildren();
+    const graphics = this.ensurePredictionPathGraphics();
+    graphics.clear();
+    if (this.predictionPathNode) {
+      this.predictionPathNode.active = false;
+    }
   }
 
   /** 渲染共享预测路径。这里只消费纯预测结果，不参与任何运行时推演。 */
   renderPredictionPath(prediction: PredictionPathResult): void {
-    this.clearPredictionPath();
+    const graphics = this.ensurePredictionPathGraphics();
+    graphics.clear();
+
     if (prediction.isEmpty || prediction.segments.length === 0) {
+      if (this.predictionPathNode) {
+        this.predictionPathNode.active = false;
+      }
       return;
     }
 
-    const pathNode = createChild(this.boardPredictionLayerNode, 'PredictionPathNode');
-    const graphics = pathNode.addComponent(Graphics);
+    if (this.predictionPathNode) {
+      this.predictionPathNode.active = true;
+    }
+
     graphics.strokeColor = new Color(251, 191, 36, 220);
     graphics.lineWidth = 2;
     graphics.lineCap = Graphics.LineCap.BUTT;
@@ -328,6 +341,17 @@ export class BoardRenderer {
     graphics.roundRect(-(CELL_SIZE - 2) / 2, -(CELL_SIZE - 2) / 2, CELL_SIZE - 2, CELL_SIZE - 2, 10);
     graphics.fill();
     graphics.stroke();
+  }
+
+  private ensurePredictionPathGraphics(): Graphics {
+    if (this.predictionPathGraphics && this.predictionPathNode?.isValid) {
+      return this.predictionPathGraphics;
+    }
+
+    this.predictionPathNode = createChild(this.boardPredictionLayerNode, 'PredictionPathNode');
+    this.predictionPathNode.active = false;
+    this.predictionPathGraphics = this.predictionPathNode.addComponent(Graphics);
+    return this.predictionPathGraphics;
   }
 
   private ensureDragHighlightNode(): Node {
