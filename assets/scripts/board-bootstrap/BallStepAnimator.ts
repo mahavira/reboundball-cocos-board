@@ -37,14 +37,15 @@ export class BallStepAnimator {
   }
 
   update(deltaMs: number): void {
-    this.renderer.syncBallNodes(this.runtime.getBallStates());
+    const ballStates = this.runtime.getBallStates();
+    this.renderer.syncBallNodes(ballStates);
 
     // 暂停且没有正在播放的 step 动画时，跳过逐球驱动循环以减少每帧开销
     if (this.runtime.isPaused() && this.activeBallSteps.size === 0) {
       return;
     }
 
-    for (const ball of this.runtime.getBallStates()) {
+    for (const ball of ballStates) {
       this.driveBallStep(ball.ballId, deltaMs);
     }
   }
