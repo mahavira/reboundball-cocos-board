@@ -13,6 +13,7 @@ import { createChild, createColor, gridToPosition, setNodeSize } from './board-r
 import { createDashedPredictionPolylines } from '../board-prediction/board-prediction-render-utils.ts';
 import { getGridFillRgba, getPlacementHighlightPalette } from './board-renderer-style.ts';
 import { createShopPlacementSpec } from '../shop/ShopItemFactory.ts';
+import { coordKey } from '../shared/helpers.ts';
 import type {
   BallRenderState,
   BoardDragItemDefinition,
@@ -58,6 +59,7 @@ export class BoardRenderer {
   private boardDragHighlightLayerNode!: Node;
   private dragHighlightNode: Node | null = null;
   private readonly ballNodeMap = new Map<string, Node>();
+  private readonly entityNodeMap = new Map<string, Node>();
 
   constructor(rootNode: Node) {
     this.rootNode = rootNode;
@@ -73,10 +75,27 @@ export class BoardRenderer {
   /** 用最新实体快照重建整个实体层。 */
   rebuildEntityLayer(entities: EntityState[]): void {
     this.boardEntityLayerNode.destroyAllChildren();
+    this.entityNodeMap.clear();
 
     for (const entity of entities) {
       this.createPlacedEntityNode(entity);
     }
+  }
+
+  /** 只刷新发生变化的实体格，避免单个充能/耐久变化重建整个实体层。 */
+  updateEntityNode(coord: GridCoord, entity: EntityState | null): void {
+    const key = coordKey(coord);
+    const oldNode = this.entityNodeMap.get(key);
+    if (oldNode) {
+      oldNode.destroy();
+      this.entityNodeMap.delete(key);
+    }
+
+    if (!entity) {
+      return;
+    }
+
+    this.createPlacedEntityNode(entity);
   }
 
   /** 同步弹球节点集合：删除多余节点，并为新弹球补建渲染节点。 */
@@ -226,6 +245,7 @@ export class BoardRenderer {
     setNodeSize(entityRootNode, CELL_SIZE, CELL_SIZE);
     entityRootNode.setPosition(gridToPosition(entity.coord));
     mountEntityVisual(entityRootNode, entity);
+    this.entityNodeMap.set(coordKey(entity.coord), entityRootNode);
   }
 
   private removeStaleBallNodes(ballStates: BallRenderState[]): void {
