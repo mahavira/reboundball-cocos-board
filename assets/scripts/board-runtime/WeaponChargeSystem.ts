@@ -1,5 +1,5 @@
 import { cloneCoord, sameCoord } from '../shared/helpers.ts';
-import { getWeaponChargeLimit, getWeaponTailCells, WEAPON_CHARGE_LIMITS } from './board-runtime-rules.ts';
+import { getWeaponChargeLimit, getWeaponTailCells } from './board-runtime-rules.ts';
 import type { EntityState, GridCoord, WeaponEvent } from '../shared/types.ts';
 import { BoardRuntimeEvents } from './BoardRuntimeEvents.ts';
 import { EntityStore } from './EntityStore.ts';
@@ -25,9 +25,8 @@ export class WeaponChargeSystem {
       }
 
       entity.charge += 1;
-      console.log(`🚀 ${entity.weaponType}(${entity.coord.row},${entity.coord.col})`, `${entity.charge}/${WEAPON_CHARGE_LIMITS[entity.weaponType]}`);
       this.events.emitCoordChange('state-changed', entity.coord, false);
-      
+
       if (entity.charge >= getWeaponChargeLimit(entity)) {
         entity.charge = 0;
         weaponEvents.push(this.createWeaponFiredEvent(entity));
