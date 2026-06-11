@@ -5,11 +5,13 @@ import type { EntitySpec, EntityState, GridCoord } from '../shared/types.ts';
 /** 实体状态仓库：只负责读写，不承载实体规则。 */
 export class EntityStore {
   private readonly entityMap = new Map<string, EntityState>();
+  private entityIdSeed = 0;
 
   loadEntities(entities: EntitySpec[]): void {
     this.entityMap.clear();
-    entities.forEach((spec, index) => {
-      this.entityMap.set(coordKey(spec.coord), createEntityState(spec, index));
+    this.entityIdSeed = 0;
+    entities.forEach((spec) => {
+      this.entityMap.set(coordKey(spec.coord), createEntityState(spec, this.createEntityId()));
     });
   }
 
@@ -42,10 +44,14 @@ export class EntityStore {
   }
 
   setFromSpec(spec: EntitySpec): void {
-    this.entityMap.set(coordKey(spec.coord), createEntityState(spec, this.entityMap.size));
+    this.entityMap.set(coordKey(spec.coord), createEntityState(spec, this.createEntityId()));
   }
 
   delete(coord: GridCoord): void {
     this.entityMap.delete(coordKey(coord));
+  }
+
+  private createEntityId(): string {
+    return `entity-${++this.entityIdSeed}`;
   }
 }
