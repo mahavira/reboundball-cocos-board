@@ -90,6 +90,7 @@ export function roundPredictionPathCorners(
       arcCenterPoint,
       incomingVector,
       outgoingVector,
+      effectiveRadius,
     )) {
       pushUniquePoint(roundedPoints, arcPoint);
     }
@@ -232,6 +233,7 @@ function createCornerArcPoints(
   arcCenterPoint: RenderPoint,
   incomingVector: RenderPoint,
   outgoingVector: RenderPoint,
+  radius: number,
 ): RenderPoint[] {
   const startAngle = Math.atan2(
     arcStartPoint.y - arcCenterPoint.y,
@@ -250,8 +252,8 @@ function createCornerArcPoints(
     const progress = step / ARC_SUBDIVISION_COUNT;
     const angle = startAngle + (normalizedEndAngle - startAngle) * progress;
     arcPoints.push({
-      x: arcCenterPoint.x + Math.cos(angle) * PREDICTION_TURN_RADIUS,
-      y: arcCenterPoint.y + Math.sin(angle) * PREDICTION_TURN_RADIUS,
+      x: arcCenterPoint.x + Math.cos(angle) * radius,
+      y: arcCenterPoint.y + Math.sin(angle) * radius,
     });
   }
 

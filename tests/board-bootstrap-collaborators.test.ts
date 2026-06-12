@@ -155,6 +155,12 @@ function createRefresherRuntimeStub() {
     runtime: {
       getEntryCoord: () => structuredClone(runtimeState.entryCoord),
       getEntities: () => structuredClone(runtimeState.entities),
+      getEntityAt: (coord: GridCoord) => {
+        const entity = runtimeState.entities.find(
+          (candidate) => candidate.coord.row === coord.row && candidate.coord.col === coord.col,
+        );
+        return entity ? structuredClone(entity) : null;
+      },
       getBallStates: () => structuredClone(runtimeState.ballStates),
     },
     runtimeState,
@@ -164,6 +170,7 @@ function createRefresherRuntimeStub() {
 function createRefresherRendererStub() {
   const rendererState = {
     rebuildEntityLayerCalls: [] as EntityState[][],
+    updateEntityNodeCalls: [] as Array<{ coord: GridCoord; entity: EntityState | null }>,
     renderPredictionPathCalls: [] as Array<{ isEmpty: boolean; segmentsLength: number }>,
     syncBallNodesCalls: [] as BallRenderState[][],
     syncIdleBallNodesCalls: [] as Array<{ ballStates: BallRenderState[]; activeBallIds: string[] }>,
@@ -173,6 +180,12 @@ function createRefresherRendererStub() {
     renderer: {
       rebuildEntityLayer: (entities: EntityState[]) => {
         rendererState.rebuildEntityLayerCalls.push(structuredClone(entities));
+      },
+      updateEntityNode: (coord: GridCoord, entity: EntityState | null) => {
+        rendererState.updateEntityNodeCalls.push({
+          coord: structuredClone(coord),
+          entity: entity ? structuredClone(entity) : null,
+        });
       },
       renderPredictionPath: (prediction: { isEmpty: boolean; segments: unknown[] }) => {
         rendererState.renderPredictionPathCalls.push({
@@ -303,11 +316,23 @@ test('BoardPresentationRefresher batches entity and prediction refreshes until f
   assert.equal(rendererState.renderPredictionPathCalls.length, 0);
 
   refresher.flushPendingPresentationRefreshes();
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
+  assert.deepEqual(rendererState.updateEntityNodeCalls, [
+    {
+      coord: { row: 3, col: 1 },
+      entity: {
+        kind: 'turner',
+        coord: { row: 3, col: 1 },
+        variant: 'left-up',
+        level: 1,
+      },
+    },
+  ]);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
 
   refresher.flushPendingPresentationRefreshes();
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
+  assert.equal(rendererState.updateEntityNodeCalls.length, 1);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
 });
 
