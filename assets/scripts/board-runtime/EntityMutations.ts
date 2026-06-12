@@ -31,6 +31,7 @@ export class EntityMutations {
     }
 
     if (this.rotateEntityInPlace(entity)) {
+      this.entities.markChanged();
       this.events.emitCoordChange('rotated', coord, true);
     }
 
@@ -45,6 +46,7 @@ export class EntityMutations {
 
     if ('level' in entity) {
       entity.level = entity.level >= 5 ? 1 : entity.level + 1;
+      this.entities.markChanged();
       this.events.emitCoordChange('upgraded', coord, true);
     }
 
