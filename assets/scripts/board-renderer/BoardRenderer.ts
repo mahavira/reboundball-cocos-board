@@ -63,6 +63,7 @@ export class BoardRenderer {
   private readonly ballNodeMap = new Map<string, Node>();
   private readonly currentBallIds = new Set<string>();
   private readonly entityNodeMap = new Map<string, Node>();
+  private readonly gridPositionCache = new Map<string, Vec3>();
 
   constructor(rootNode: Node) {
     this.rootNode = rootNode;
@@ -123,7 +124,7 @@ export class BoardRenderer {
     if (!ballNode) {
       return false;
     }
-    ballNode.setPosition(gridToPosition(coord));
+    ballNode.setPosition(this.resolveGridPosition(coord));
     return true;
   }
 
@@ -158,8 +159,8 @@ export class BoardRenderer {
     graphics.lineJoin = Graphics.LineJoin.ROUND;
 
     const pathPoints = [
-      gridToPosition(prediction.segments[0].from),
-      ...prediction.segments.map((segment) => gridToPosition(segment.to)),
+      this.getCachedGridPosition(prediction.segments[0].from),
+      ...prediction.segments.map((segment) => this.getCachedGridPosition(segment.to)),
     ];
 
     for (const dashedPolyline of createDashedPredictionPolylines(pathPoints)) {
@@ -194,7 +195,7 @@ export class BoardRenderer {
   showPlacementHighlight(coord: GridCoord, state: PlacementHighlightState): void {
     const highlightNode = this.ensureDragHighlightNode();
     highlightNode.active = true;
-    highlightNode.setPosition(gridToPosition(coord));
+    highlightNode.setPosition(this.getCachedGridPosition(coord));
 
     const graphics = highlightNode.getComponent(Graphics);
     if (!graphics) {
@@ -257,7 +258,7 @@ export class BoardRenderer {
      * 否则鼠标移动阶段可能在事件分发里读到空的 cameraPriority。
      */
     setNodeSize(entityRootNode, CELL_SIZE, CELL_SIZE);
-    entityRootNode.setPosition(gridToPosition(entity.coord));
+    entityRootNode.setPosition(this.getCachedGridPosition(entity.coord));
     mountEntityVisual(entityRootNode, entity);
     this.entityNodeMap.set(coordKey(entity.coord), entityRootNode);
   }
@@ -335,7 +336,7 @@ export class BoardRenderer {
 
   private createGridCell(coord: GridCoord): void {
     const cellNode = createChild(this.boardGridLayerNode, `Grid-${coord.row}-${coord.col}`);
-    cellNode.setPosition(gridToPosition(coord));
+    cellNode.setPosition(this.getCachedGridPosition(coord));
     setNodeSize(cellNode, CELL_SIZE - 2, CELL_SIZE - 2);
 
     const graphics = cellNode.addComponent(Graphics);
@@ -368,6 +369,29 @@ export class BoardRenderer {
     this.dragHighlightNode.addComponent(Graphics);
     this.dragHighlightNode.active = false;
     return this.dragHighlightNode;
+  }
+
+  private resolveGridPosition(coord: GridCoord): Vec3 {
+    if (this.isDiscreteGridCoord(coord)) {
+      return this.getCachedGridPosition(coord);
+    }
+    return gridToPosition(coord);
+  }
+
+  private getCachedGridPosition(coord: GridCoord): Vec3 {
+    const key = coordKey(coord);
+    const cachedPosition = this.gridPositionCache.get(key);
+    if (cachedPosition) {
+      return cachedPosition;
+    }
+
+    const position = gridToPosition(coord);
+    this.gridPositionCache.set(key, position);
+    return position;
+  }
+
+  private isDiscreteGridCoord(coord: GridCoord): boolean {
+    return Number.isInteger(coord.row) && Number.isInteger(coord.col);
   }
 
   private isPointInsideBoard(localPoint: Vec3): boolean {
