@@ -441,7 +441,7 @@ test('explicit entity layout operations publish passive refresh events', () => {
   runtime.rotateEntity({ row: 3, col: 3 });
   runtime.upgradeEntity({ row: 3, col: 3 });
   runtime.removeEntity({ row: 3, col: 3 });
-  runtime.resetBoard(createBoardPreset({ entities: [] }));
+  runtime.resetEntities([]);
 
   assert.deepEqual(events, [
     { kind: 'placed', changedCoords: ['3,3'], requiresPredictionRefresh: true },
@@ -450,4 +450,18 @@ test('explicit entity layout operations publish passive refresh events', () => {
     { kind: 'removed', changedCoords: ['3,3'], requiresPredictionRefresh: true },
     { kind: 'reset', changedCoords: [], requiresPredictionRefresh: true },
   ]);
+});
+
+test('resetBoard rejects preset-level board config changes on an existing runtime', () => {
+  const runtime = createRuntime();
+
+  assert.throws(
+    () => runtime.resetBoard(createBoardPreset({ entryCoord: { row: 0, col: 0 } })),
+    /cannot replace entryCoord or baseStepMs/,
+  );
+
+  assert.throws(
+    () => runtime.resetBoard(createBoardPreset({ baseStepMs: 1200 })),
+    /cannot replace entryCoord or baseStepMs/,
+  );
 });

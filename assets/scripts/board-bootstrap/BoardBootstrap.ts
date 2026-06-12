@@ -74,10 +74,10 @@ export class BoardBootstrap extends Component {
     return this.ballStepAnimator.addProgressListener(listener);
   }
 
-  /** 以当前默认 preset 重置 runtime 与弹球，供调试桥和场景初始化复用。 */
+  /** 以当前默认实体布局重置 runtime 与弹球，供调试桥和场景初始化复用。 */
   resetBoardRuntime(): void {
     this.ballStepAnimator.clear();
-    this.runtime.resetBoard(createBoardPreset());
+    this.runtime.resetEntities(createBoardPreset().entities);
     this.runtime.spawnBall({ ballId: 'ball-1', isFast: false });
     this.presentationRefresher.flushPendingPresentationRefreshes();
     this.presentationRefresher.refreshIdleBallPresentation();

@@ -15,6 +15,28 @@ function createPredictor(entities: EntitySpec[], maxSteps = 32) {
   );
 }
 
+function createRuntimePredictionComparison(entities: EntitySpec[], stepCount: number) {
+  const runtime = new BoardRuntime(createBoardPreset({ entities }));
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  const runtimeSteps = Array.from({ length: stepCount }, () => runtime.tickBall('ball-1'));
+  const predictor = new BoardPathPredictor(
+    {
+      entryCoord: runtime.getEntryCoord(),
+      entities: runtime.getEntities(),
+    },
+    { maxSteps: stepCount + 2 },
+  );
+  const prediction = predictor.predictSharedPath();
+  const predictedSegments = prediction.segments.slice(0, stepCount);
+
+  assert.deepEqual(
+    predictedSegments.map((segment) => segment.to),
+    runtimeSteps.map((step) => step.finalCell),
+  );
+
+  return { prediction, runtimeSteps };
+}
+
 test('predicts the straight entry path until a loop is detected', () => {
   const predictor = createPredictor([]);
 
@@ -115,4 +137,26 @@ test('predictor does not mutate the runtime entity snapshot it reads from', () =
 
   assert.equal(entityAfterPrediction?.kind, 'rotator');
   assert.equal(entityAfterPrediction?.kind === 'rotator' ? entityAfterPrediction.variant : null, 'left-up');
+});
+
+test('predictor and runtime share entry, turner, and blocked-bounce path rules', () => {
+  const { prediction, runtimeSteps } = createRuntimePredictionComparison([
+    { kind: 'turner', coord: { row: 3, col: 1 }, variant: 'left-up', level: 1 },
+    { kind: 'stone', coord: { row: 2, col: 1 } },
+  ], 4);
+
+  assert.equal(runtimeSteps[0].finalDirection, 'up');
+  assert.equal(runtimeSteps[1].outcome, 'blocked');
+  assert.equal(prediction.segments[1].direction, runtimeSteps[1].finalDirection);
+  assert.equal(prediction.segments[2].direction, runtimeSteps[2].finalDirection);
+});
+
+test('predictor and runtime share outer-ring pipe path rules', () => {
+  const { prediction, runtimeSteps } = createRuntimePredictionComparison([
+    { kind: 'turner', coord: { row: 3, col: 5 }, variant: 'left-down', level: 1 },
+  ], 10);
+
+  assert.deepEqual(runtimeSteps[7].finalCell, { row: 6, col: 5 });
+  assert.equal(runtimeSteps[8].finalDirection, 'up');
+  assert.equal(prediction.segments[9].direction, runtimeSteps[8].finalDirection);
 });

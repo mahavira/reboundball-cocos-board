@@ -1,4 +1,4 @@
-import { cloneCoord, coordKey } from '../shared/helpers.ts';
+import { cloneCoord } from '../shared/helpers.ts';
 import { buildPipePath } from './board-runtime-rules.ts';
 import type {
   BallProgress,
@@ -22,6 +22,7 @@ import type {
 import { BallMotionBuilder } from './BallMotionBuilder.ts';
 import { BallStepper } from './BallStepper.ts';
 import { BoardRuntimeEvents } from './BoardRuntimeEvents.ts';
+import { createPipeIndex } from './ball-path-rules.ts';
 import type { EntityChangeKind } from './BoardRuntimeEvents.ts';
 import { createBoardPreset } from './createBoardPreset.ts';
 import { EntityMutations } from './EntityMutations.ts';
@@ -82,7 +83,7 @@ export class BoardRuntime {
     this.entryCoord = cloneCoord(preset.entryCoord);
     this.baseStepMs = preset.baseStepMs;
     this.pipePath = buildPipePath();
-    this.pipeIndexByKey = this.createPipeIndex(this.pipePath);
+    this.pipeIndexByKey = createPipeIndex(this.pipePath);
 
     this.entities.loadEntities(preset.entities);
     this.stepper = new BallStepper({
@@ -161,11 +162,28 @@ export class BoardRuntime {
     this.balls.clear();
   }
 
-  resetBoard(preset: BoardPreset = createBoardPreset()): void {
-    this.entities.loadEntities(preset.entities);
+  /** 只重置实体布局和本轮弹球状态，入口与基础步进时长保持当前 runtime 配置。 */
+  resetEntities(entities: EntitySpec[] = createBoardPreset().entities): void {
+    this.entities.loadEntities(entities);
     this.clearBalls();
     this.paused = false;
     this.events.emitReset();
+  }
+
+  /**
+   * 保留完整棋盘重置入口，但 preset 的棋盘级配置必须与当前 runtime 一致。
+   * BoardRuntime 的入口和基础步进时长在构造后不会热替换，避免重置时出现半套 preset 生效。
+   */
+  resetBoard(preset: BoardPreset = createBoardPreset()): void {
+    if (
+      preset.baseStepMs !== this.baseStepMs
+      || preset.entryCoord.row !== this.entryCoord.row
+      || preset.entryCoord.col !== this.entryCoord.col
+    ) {
+      throw new Error('resetBoard cannot replace entryCoord or baseStepMs on an existing BoardRuntime');
+    }
+
+    this.resetEntities(preset.entities);
   }
 
   placeEntity(spec: EntitySpec, changeKind: EntityChangeKind = 'placed'): void {
@@ -204,10 +222,6 @@ export class BoardRuntime {
       isFast: ball.isFast,
       speedMultiplier: ball.speedMultiplier,
     };
-  }
-
-  private createPipeIndex(pipePath: GridCoord[]): Map<string, number> {
-    return new Map(pipePath.map((coord, index) => [coordKey(coord), index]));
   }
 
   private createBallId(): string {

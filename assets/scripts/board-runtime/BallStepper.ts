@@ -1,18 +1,11 @@
 import {
   cloneCoord,
-  coordKey,
-  isBoardCoord,
-  isOuterRingCoord,
-  moveCoord,
-  sameCoord,
 } from '../shared/helpers.ts';
 import {
   canEnterEntity,
   getSegmentDurationMs,
   handleBlockedEntityHit,
-  OPPOSITE_DIRECTION,
   resolveCenterInteraction,
-  resolvePipeDirection,
   resolveSegmentDurationMultiplier,
   rotateVariantClockwise,
 } from './board-runtime-rules.ts';
@@ -31,6 +24,11 @@ import { BallMotionBuilder } from './BallMotionBuilder.ts';
 import { BoardRuntimeEvents } from './BoardRuntimeEvents.ts';
 import { EntityStore } from './EntityStore.ts';
 import { WeaponChargeSystem } from './WeaponChargeSystem.ts';
+import {
+  resolveBallTargetCell,
+  resolveBlockedBallDirection,
+  resolveDirectionAfterCenter,
+} from './ball-path-rules.ts';
 
 type StepContext = {
   ball: BallState;
@@ -106,7 +104,12 @@ export class BallStepper {
     const currentDirection = ball.direction;
     const currentEntity = this.entities.getMutable(currentCell);
     const weaponEvents = this.weaponChargeSystem.handleTailCharge(currentCell);
-    const targetCell = this.resolveTargetCell(ball);
+    const targetCell = resolveBallTargetCell(currentCell, currentDirection, {
+      entryCoord: this.entryCoord,
+      boardSize: BOARD_SIZE,
+      pipePath: this.pipePath,
+      pipeIndexByKey: this.pipeIndexByKey,
+    });
     const targetEntity = this.entities.getMutable(targetCell);
     const incomingDirection = ball.direction;
     const currentDurationMultiplier = resolveSegmentDurationMultiplier({
@@ -135,28 +138,6 @@ export class BallStepper {
     };
   }
 
-  private resolveTargetCell(ball: BallState): GridCoord {
-    if (isOuterRingCoord(ball.cell, BOARD_SIZE)) {
-      return this.resolveOuterRingTarget(ball);
-    }
-
-    const next = moveCoord(ball.cell, ball.direction);
-    return isBoardCoord(next, BOARD_SIZE) ? next : ball.cell;
-  }
-
-  private resolveOuterRingTarget(ball: BallState): GridCoord {
-    if (sameCoord(ball.cell, this.entryCoord) && ball.direction === 'right') {
-      return moveCoord(ball.cell, 'right');
-    }
-
-    const currentIndex = this.pipeIndexByKey.get(coordKey(ball.cell));
-    if (currentIndex === undefined) {
-      throw new Error(`Pipe cell missing index: ${coordKey(ball.cell)}`);
-    }
-
-    return cloneCoord(this.pipePath[(currentIndex + 1) % this.pipePath.length]);
-  }
-
   private createBlockedStepResult(context: StepContext): BallStepResult {
     const {
       ball,
@@ -173,7 +154,12 @@ export class BallStepper {
 
     this.resolveBlockedEntityState(targetCell, targetEntity);
 
-    ball.direction = this.resolveBlockedDirection(currentEntity, ball.direction, stepId);
+    ball.direction = resolveBlockedBallDirection(
+      currentEntity,
+      ball.direction,
+      stepId,
+      this.entryCoord,
+    );
 
     const segmentDurationMs = getSegmentDurationMs(
       this.baseStepMs,
@@ -277,12 +263,16 @@ export class BallStepper {
       });
     }
 
-    ball.direction = this.resolveDirectionAfterCenterInteraction(
+    ball.direction = resolveDirectionAfterCenter({
       currentCell,
       targetCell,
-      ball.direction,
-      centerResult.nextDirection,
-    );
+      currentDirection: ball.direction,
+      centerNextDirection: centerResult.nextDirection,
+      entryCoord: this.entryCoord,
+      boardSize: BOARD_SIZE,
+      pipePath: this.pipePath,
+      pipeIndexByKey: this.pipeIndexByKey,
+    });
 
     return this.createStepResult({
       ball,
@@ -342,56 +332,6 @@ export class BallStepper {
 
     currentEntity.variant = rotateVariantClockwise(currentEntity.variant);
     this.events.emitCoordChange('rotated', currentCell, true);
-  }
-
-  private resolveBlockedDirection(
-    currentEntity: EntityState | null,
-    currentDirection: Direction,
-    stepId: number,
-  ): Direction {
-    const reflectedDirection = OPPOSITE_DIRECTION[currentDirection];
-
-    if (!currentEntity || !('variant' in currentEntity)) {
-      return reflectedDirection;
-    }
-
-    return (
-      resolveCenterInteraction(
-        currentEntity,
-        reflectedDirection,
-        stepId,
-        this.entryCoord,
-      ).nextDirection ?? reflectedDirection
-    );
-  }
-
-  private resolveDirectionAfterCenterInteraction(
-    currentCell: GridCoord,
-    targetCell: GridCoord,
-    currentDirection: Direction,
-    centerNextDirection?: Direction,
-  ): Direction {
-    if (centerNextDirection) {
-      return centerNextDirection;
-    }
-
-    if (this.shouldEnterBoardFromPipe(currentCell, targetCell)) {
-      return 'right';
-    }
-
-    if (isOuterRingCoord(targetCell, BOARD_SIZE) && !sameCoord(targetCell, this.entryCoord)) {
-      return resolvePipeDirection(targetCell, this.pipePath, this.pipeIndexByKey);
-    }
-
-    return currentDirection;
-  }
-
-  private shouldEnterBoardFromPipe(currentCell: GridCoord, targetCell: GridCoord): boolean {
-    return (
-      sameCoord(targetCell, this.entryCoord) &&
-      isOuterRingCoord(targetCell, BOARD_SIZE) &&
-      isOuterRingCoord(currentCell, BOARD_SIZE)
-    );
   }
 
   private createStepResult(params: {

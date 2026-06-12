@@ -65,7 +65,7 @@ export class EntityStore {
   }
 
   private createEntityId(): string {
-    return `weapon-${++this.entityIdSeed}`;
+    return `entity-${++this.entityIdSeed}`;
   }
 
   private bumpVersion(): void {

@@ -1,19 +1,10 @@
 import {
   buildPipePath,
   canEnterEntity,
-  OPPOSITE_DIRECTION,
   resolveCenterInteraction,
-  resolvePipeDirection,
 } from '../board-runtime/board-runtime-rules.ts';
 import { BOARD_SIZE } from '../board-runtime/constants.ts';
-import {
-  cloneCoord,
-  coordKey,
-  isBoardCoord,
-  isOuterRingCoord,
-  moveCoord,
-  sameCoord,
-} from '../shared/helpers.ts';
+import { cloneCoord, coordKey } from '../shared/helpers.ts';
 import type {
   BallState,
   EntityState,
@@ -23,6 +14,12 @@ import type {
   PredictionPathResult,
   PredictionPathSegment,
 } from '../shared/types.ts';
+import {
+  createPipeIndex,
+  resolveBallTargetCell,
+  resolveBlockedBallDirection,
+  resolveDirectionAfterCenter,
+} from '../board-runtime/ball-path-rules.ts';
 
 type PredictionState = Pick<BallState, 'cell' | 'direction' | 'isFast' | 'speedMultiplier'>;
 
@@ -40,7 +37,7 @@ export class BoardPathPredictor {
   private readonly entryCoord: GridCoord;
   private readonly entityMap = new Map<string, EntityState>();
   private readonly pipePath = buildPipePath();
-  private readonly pipeIndexByKey = new Map(this.pipePath.map((coord, index) => [coordKey(coord), index]));
+  private readonly pipeIndexByKey = createPipeIndex(this.pipePath);
   private readonly maxSteps: number;
 
   constructor(snapshot: PredictionBoardSnapshot, options?: PredictionPathOptions) {
@@ -110,7 +107,12 @@ export class BoardPathPredictor {
     const currentCell = cloneCoord(state.cell);
     const currentDirection = state.direction;
     const currentEntity = this.getEntityAt(currentCell);
-    const targetCell = this.resolveTargetCell(state);
+    const targetCell = resolveBallTargetCell(currentCell, currentDirection, {
+      entryCoord: this.entryCoord,
+      boardSize: BOARD_SIZE,
+      pipePath: this.pipePath,
+      pipeIndexByKey: this.pipeIndexByKey,
+    });
     const targetEntity = this.getEntityAt(targetCell);
 
     if (!canEnterEntity(targetEntity, currentDirection)) {
@@ -153,20 +155,16 @@ export class BoardPathPredictor {
       };
     }
 
-    if (centerResult.nextDirection) {
-      state.direction = centerResult.nextDirection;
-    } else if (
-      sameCoord(targetCell, this.entryCoord) &&
-      isOuterRingCoord(targetCell, BOARD_SIZE) &&
-      isOuterRingCoord(currentCell, BOARD_SIZE)
-    ) {
-      state.direction = 'right';
-    } else if (
-      isOuterRingCoord(targetCell, BOARD_SIZE) &&
-      !sameCoord(targetCell, this.entryCoord)
-    ) {
-      state.direction = resolvePipeDirection(targetCell, this.pipePath, this.pipeIndexByKey);
-    }
+    state.direction = resolveDirectionAfterCenter({
+      currentCell,
+      targetCell,
+      currentDirection: state.direction,
+      centerNextDirection: centerResult.nextDirection,
+      entryCoord: this.entryCoord,
+      boardSize: BOARD_SIZE,
+      pipePath: this.pipePath,
+      pipeIndexByKey: this.pipeIndexByKey,
+    });
 
     return {
       segments: [movementSegment],
@@ -182,16 +180,12 @@ export class BoardPathPredictor {
     currentEntity: EntityState | null,
     stepId: number,
   ): PredictionStepOutcome {
-    const reflectedDirection = OPPOSITE_DIRECTION[currentDirection];
-    state.direction =
-      (currentEntity?.kind === 'turner' || currentEntity?.kind === 'rotator')
-        ? (resolveCenterInteraction(
-            currentEntity,
-            reflectedDirection,
-            stepId,
-            this.entryCoord,
-          ).nextDirection ?? reflectedDirection)
-        : reflectedDirection;
+    state.direction = resolveBlockedBallDirection(
+      currentEntity,
+      currentDirection,
+      stepId,
+      this.entryCoord,
+    );
 
     // 预测结果按格级路径表达，阻挡时保留在当前格，下一步再按反射方向继续。
     return {
@@ -216,27 +210,5 @@ export class BoardPathPredictor {
 
   private getEntityAt(coord: GridCoord): EntityState | null {
     return this.entityMap.get(coordKey(coord)) ?? null;
-  }
-
-  private resolveTargetCell(state: PredictionState): GridCoord {
-    if (isOuterRingCoord(state.cell, BOARD_SIZE)) {
-      if (sameCoord(state.cell, this.entryCoord) && state.direction === 'right') {
-        return moveCoord(state.cell, 'right');
-      }
-
-      const currentIndex = this.pipeIndexByKey.get(coordKey(state.cell));
-      if (currentIndex === undefined) {
-        throw new Error(`Pipe cell missing index: ${coordKey(state.cell)}`);
-      }
-
-      return cloneCoord(this.pipePath[(currentIndex + 1) % this.pipePath.length]);
-    }
-
-    const nextCell = moveCoord(state.cell, state.direction);
-    if (!isBoardCoord(nextCell, BOARD_SIZE)) {
-      return state.cell;
-    }
-
-    return nextCell;
   }
 }
