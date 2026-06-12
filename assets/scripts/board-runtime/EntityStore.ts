@@ -6,6 +6,7 @@ import type { EntitySpec, EntityState, GridCoord } from '../shared/types.ts';
 export class EntityStore {
   private readonly entityMap = new Map<string, EntityState>();
   private entityIdSeed = 0;
+  private version = 0;
 
   loadEntities(entities: EntitySpec[]): void {
     this.entityMap.clear();
@@ -13,6 +14,7 @@ export class EntityStore {
     entities.forEach((spec) => {
       this.entityMap.set(coordKey(spec.coord), createEntityState(spec, this.createEntityId()));
     });
+    this.bumpVersion();
   }
 
   getMutable(coord: GridCoord): EntityState | null {
@@ -43,15 +45,30 @@ export class EntityStore {
     return Array.from(this.entityMap.values(), (entity) => structuredClone(entity));
   }
 
+  getVersion(): number {
+    return this.version;
+  }
+
   setFromSpec(spec: EntitySpec): void {
     this.entityMap.set(coordKey(spec.coord), createEntityState(spec, this.createEntityId()));
+    this.bumpVersion();
   }
 
   delete(coord: GridCoord): void {
-    this.entityMap.delete(coordKey(coord));
+    if (this.entityMap.delete(coordKey(coord))) {
+      this.bumpVersion();
+    }
+  }
+
+  markChanged(): void {
+    this.bumpVersion();
   }
 
   private createEntityId(): string {
     return `weapon-${++this.entityIdSeed}`;
+  }
+
+  private bumpVersion(): void {
+    this.version += 1;
   }
 }
