@@ -28,6 +28,7 @@ export class BallStepAnimator {
   private readonly renderer: BoardRenderer;
   /** ballId → 当前正在推进的 step 上下文。 */
   private readonly activeBallSteps = new Map<string, BallStepContext>();
+  private readonly activeBallIdsSnapshot = new Set<string>();
   /** 弹球进度事件的外部监听器集合。 */
   private readonly progressListeners = new Set<(event: BallProgressEvent) => void>();
 
@@ -52,10 +53,15 @@ export class BallStepAnimator {
 
   clear(): void {
     this.activeBallSteps.clear();
+    this.activeBallIdsSnapshot.clear();
   }
 
   getActiveBallIds(): Set<string> {
-    return new Set(this.activeBallSteps.keys());
+    this.activeBallIdsSnapshot.clear();
+    for (const ballId of this.activeBallSteps.keys()) {
+      this.activeBallIdsSnapshot.add(ballId);
+    }
+    return this.activeBallIdsSnapshot;
   }
 
   addProgressListener(listener: (event: BallProgressEvent) => void): () => void {
