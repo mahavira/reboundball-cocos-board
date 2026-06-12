@@ -1,14 +1,18 @@
-import { cloneCoord, sameCoord } from '../shared/helpers.ts';
+import { cloneCoord, coordKey } from '../shared/helpers.ts';
 import { getWeaponChargeLimit, getWeaponTailCells } from './board-runtime-rules.ts';
 import type { EntityState, GridCoord, WeaponEvent } from '../shared/types.ts';
 import { BoardRuntimeEvents } from './BoardRuntimeEvents.ts';
 import { EntityStore } from './EntityStore.ts';
 import { canUseWeaponTailCharge } from '../shared/entity-registry.ts';
 
+type WeaponEntity = Extract<EntityState, { kind: 'weapon' }>;
+
 /** 负责武器尾巴触发、充能和开火事件生成。 */
 export class WeaponChargeSystem {
   private readonly entities: EntityStore;
   private readonly events: BoardRuntimeEvents;
+  private readonly tailIndex = new Map<string, WeaponEntity[]>();
+  private indexedEntityVersion = -1;
 
   constructor(entities: EntityStore, events: BoardRuntimeEvents) {
     this.entities = entities;
@@ -17,13 +21,9 @@ export class WeaponChargeSystem {
 
   handleTailCharge(centerCell: GridCoord): WeaponEvent[] {
     const weaponEvents: WeaponEvent[] = [];
+    const triggeredWeapons = this.getWeaponsAtTailCell(centerCell);
 
-    // 仅遍历具备尾部充能能力的武器实体，避免遍历全部实体
-    for (const entity of this.entities.filterMutable((e) => canUseWeaponTailCharge(e))) {
-      if (!this.isWeaponTailTriggered(entity, centerCell)) {
-        continue;
-      }
-
+    for (const entity of triggeredWeapons) {
       entity.charge += 1;
       this.events.emitCoordChange('state-changed', entity.coord, false);
 
@@ -36,14 +36,39 @@ export class WeaponChargeSystem {
     return weaponEvents;
   }
 
-  private isWeaponTailTriggered(
-    entity: EntityState,
-    centerCell: GridCoord,
-  ): entity is EntityState & { kind: 'weapon' } {
-    return getWeaponTailCells(entity).some((coord) => sameCoord(coord, centerCell));
+  private getWeaponsAtTailCell(centerCell: GridCoord): WeaponEntity[] {
+    this.ensureTailIndexFresh();
+    return this.tailIndex.get(coordKey(centerCell)) ?? [];
   }
 
-  private createWeaponFiredEvent(entity: EntityState & { kind: 'weapon' }): WeaponEvent {
+  private ensureTailIndexFresh(): void {
+    const currentVersion = this.entities.getVersion();
+    if (this.indexedEntityVersion === currentVersion) {
+      return;
+    }
+
+    this.rebuildTailIndex();
+    this.indexedEntityVersion = currentVersion;
+  }
+
+  private rebuildTailIndex(): void {
+    this.tailIndex.clear();
+
+    for (const entity of this.entities.getAllMutable()) {
+      if (!canUseWeaponTailCharge(entity)) {
+        continue;
+      }
+
+      for (const tailCell of getWeaponTailCells(entity)) {
+        const key = coordKey(tailCell);
+        const weapons = this.tailIndex.get(key) ?? [];
+        weapons.push(entity);
+        this.tailIndex.set(key, weapons);
+      }
+    }
+  }
+
+  private createWeaponFiredEvent(entity: WeaponEntity): WeaponEvent {
     return {
       type: 'weapon-fired',
       weaponId: entity.id,
