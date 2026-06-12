@@ -81,8 +81,9 @@ export class BoardPresentationRefresher {
 
   /** 只同步与空闲弹球位置相关的展示层，不重建实体和预测路径。 */
   refreshIdleBallPresentation(): void {
-    this.ensureBallNodes();
-    this.syncIdleBallNodes();
+    const ballStates = this.runtime.getBallStates();
+    this.renderer.syncBallNodes(ballStates);
+    this.renderer.syncIdleBallNodes(ballStates, this.getActiveBallIds());
   }
 
   private collectChangedCoords(coords: GridCoord[]): void {
@@ -121,15 +122,5 @@ export class BoardPresentationRefresher {
     }
 
     this.renderer.renderPredictionPath(this.predictionPathPredictor.predictSharedPath());
-  }
-
-  /** 同步弹球渲染节点集合。 */
-  private ensureBallNodes(): void {
-    this.renderer.syncBallNodes(this.runtime.getBallStates());
-  }
-
-  /** 把所有未处于动画中的弹球同步回运行时位置。 */
-  private syncIdleBallNodes(): void {
-    this.renderer.syncIdleBallNodes(this.runtime.getBallStates(), this.getActiveBallIds());
   }
 }
