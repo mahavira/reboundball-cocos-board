@@ -71,8 +71,8 @@ export class BoardRenderer {
     this.entityLayerRenderer.rebuild(entities);
   }
 
-  updateEntityNode(coord: GridCoord, entity: EntityState | null): void {
-    this.entityLayerRenderer.update(coord, entity);
+  updateEntityNode(coord: GridCoord, entity: EntityState | null, entities: EntityState[]): void {
+    this.entityLayerRenderer.update(coord, entity, entities);
   }
 
   playWeaponTailChargeFeedback(weaponCoord: GridCoord, tailCoord: GridCoord): void {

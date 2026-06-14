@@ -33,11 +33,11 @@ export class BoardEntityLayerRenderer {
 
     const activeSupportAuraState = collectActiveSupportAuraState(entities);
     for (const entity of entities) {
-      this.createPlacedEntityNode(entity, getEntitySupportAuraLightDirection(entity, activeSupportAuraState));
+      this.createPlacedEntityNode(entity, getEntitySupportAuraLightDirections(entity, activeSupportAuraState));
     }
   }
 
-  update(coord: GridCoord, entity: EntityState | null): void {
+  update(coord: GridCoord, entity: EntityState | null, entities: EntityState[]): void {
     const key = coordKey(coord);
     const oldNode = this.entityNodeMap.get(key);
     if (oldNode) {
@@ -49,7 +49,8 @@ export class BoardEntityLayerRenderer {
       return;
     }
 
-    this.createPlacedEntityNode(entity, null);
+    const activeSupportAuraState = collectActiveSupportAuraState(entities);
+    this.createPlacedEntityNode(entity, getEntitySupportAuraLightDirections(entity, activeSupportAuraState));
   }
 
   playWeaponTailChargeFeedback(weaponCoord: GridCoord, tailCoord: GridCoord): void {
@@ -88,7 +89,7 @@ export class BoardEntityLayerRenderer {
       .start();
   }
 
-  private createPlacedEntityNode(entity: EntityState, supportAuraLightDirection: Direction | null): void {
+  private createPlacedEntityNode(entity: EntityState, supportAuraLightDirections: readonly Direction[]): void {
     const entityRootNode = createChild(
       this.getEntityLayerNode(),
       `Entity-${entity.coord.row}-${entity.coord.col}`,
@@ -99,25 +100,22 @@ export class BoardEntityLayerRenderer {
     setNodeSize(entityRootNode, CELL_SIZE, CELL_SIZE);
     entityRootNode.setPosition(this.coordinateMapper.getCachedGridPosition(entity.coord));
     mountEntityVisual(entityRootNode, entity);
-    if (supportAuraLightDirection) {
-      mountSupportAuraActiveLight(entityRootNode, supportAuraLightDirection);
+    for (const direction of supportAuraLightDirections) {
+      mountSupportAuraActiveLight(entityRootNode, direction);
     }
     this.entityNodeMap.set(coordKey(entity.coord), entityRootNode);
   }
 }
 
-function getEntitySupportAuraLightDirection(
+function getEntitySupportAuraLightDirections(
   entity: EntityState,
   auraState: ActiveSupportAuraState,
-): Direction | null {
+): readonly Direction[] {
   const key = coordKey(entity.coord);
   if (entity.kind === 'weapon') {
-    return auraState.activeWeaponDirectionByCoordKey.get(key) ?? null;
+    return auraState.activeLightDirectionsByCoordKey.get(key) ?? [];
   }
-  if (entity.kind === 'support') {
-    return auraState.activeSupportDirectionByCoordKey.get(key) ?? null;
-  }
-  return null;
+  return [];
 }
 
 function mountSupportAuraActiveLight(targetNode: Node, direction: Direction): void {

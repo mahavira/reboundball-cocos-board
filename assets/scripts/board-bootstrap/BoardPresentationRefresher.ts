@@ -1,5 +1,6 @@
 import { BoardPathPredictor } from '../board-prediction/BoardPathPredictor.ts';
-import { coordKey } from '../shared/helpers.ts';
+import { DIRECTIONS } from '../shared/entity-definitions.ts';
+import { coordKey, moveCoord } from '../shared/helpers.ts';
 import type { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import type { BoardRuntime } from '../board-runtime/BoardRuntime.ts';
 import type { BoardEntityChangeEvent, GridCoord, WeaponTailFeedback } from '../shared/types.ts';
@@ -98,6 +99,10 @@ export class BoardPresentationRefresher {
   private collectChangedCoords(coords: GridCoord[]): void {
     for (const coord of coords) {
       this.pendingRefresh.changedCoordsByKey.set(coordKey(coord), coord);
+      for (const direction of DIRECTIONS) {
+        const neighborCoord = moveCoord(coord, direction);
+        this.pendingRefresh.changedCoordsByKey.set(coordKey(neighborCoord), neighborCoord);
+      }
     }
   }
 
@@ -115,8 +120,9 @@ export class BoardPresentationRefresher {
 
   /** 用最新运行时实体快照刷新发生变化的格子。 */
   private refreshChangedEntityPresentation(): void {
+    const entities = this.runtime.getEntities();
     for (const coord of this.pendingRefresh.changedCoordsByKey.values()) {
-      this.renderer.updateEntityNode(coord, this.runtime.getEntityAt(coord));
+      this.renderer.updateEntityNode(coord, this.runtime.getEntityAt(coord), entities);
     }
   }
 

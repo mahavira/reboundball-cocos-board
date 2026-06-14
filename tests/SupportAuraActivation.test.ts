@@ -37,6 +37,9 @@ test('support aura activation marks adjacent weapons and supports only once', ()
   assert.equal(auraState.activeWeaponDirectionByCoordKey.get('3,3'), 'up');
   assert.equal(auraState.activeSupportDirectionByCoordKey.get('2,3'), 'down');
   assert.equal(auraState.activeSupportDirectionByCoordKey.get('3,2'), 'right');
+  assert.deepEqual(auraState.activeLightDirectionsByCoordKey.get('3,3'), ['up', 'left']);
+  assert.equal(auraState.activeLightDirectionsByCoordKey.get('2,3'), undefined);
+  assert.equal(auraState.activeLightDirectionsByCoordKey.get('3,2'), undefined);
 });
 
 test('support aura activation ignores diagonal and non linked entities', () => {
@@ -71,4 +74,5 @@ test('support aura activation ignores diagonal and non linked entities', () => {
   assert.equal(auraState.activeSupportCoordKeys.size, 0);
   assert.equal(auraState.activeWeaponDirectionByCoordKey.size, 0);
   assert.equal(auraState.activeSupportDirectionByCoordKey.size, 0);
+  assert.equal(auraState.activeLightDirectionsByCoordKey.size, 0);
 });

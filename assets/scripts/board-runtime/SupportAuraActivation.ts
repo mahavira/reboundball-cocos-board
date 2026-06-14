@@ -6,6 +6,7 @@ export type ActiveSupportAuraState = {
   activeSupportCoordKeys: ReadonlySet<string>;
   activeWeaponDirectionByCoordKey: ReadonlyMap<string, Direction>;
   activeSupportDirectionByCoordKey: ReadonlyMap<string, Direction>;
+  activeLightDirectionsByCoordKey: ReadonlyMap<string, readonly Direction[]>;
 };
 
 const SUPPORT_AURA_DIRECTIONS: Direction[] = ['up', 'right', 'down', 'left'];
@@ -26,6 +27,7 @@ export function collectActiveSupportAuraState(
   const activeSupportCoordKeys = new Set<string>();
   const activeWeaponDirectionByCoordKey = new Map<string, Direction>();
   const activeSupportDirectionByCoordKey = new Map<string, Direction>();
+  const activeLightDirectionsByCoordKey = new Map<string, Direction[]>();
 
   for (const entity of entities) {
     entityByCoordKey.set(coordKey(entity.coord), entity);
@@ -42,6 +44,7 @@ export function collectActiveSupportAuraState(
       activeSupportCoordKeys,
       activeWeaponDirectionByCoordKey,
       activeSupportDirectionByCoordKey,
+      activeLightDirectionsByCoordKey,
     );
   }
 
@@ -50,6 +53,7 @@ export function collectActiveSupportAuraState(
     activeSupportCoordKeys,
     activeWeaponDirectionByCoordKey,
     activeSupportDirectionByCoordKey,
+    activeLightDirectionsByCoordKey,
   };
 }
 
@@ -60,6 +64,7 @@ function collectActiveAdjacentSupports(
   activeSupportCoordKeys: Set<string>,
   activeWeaponDirectionByCoordKey: Map<string, Direction>,
   activeSupportDirectionByCoordKey: Map<string, Direction>,
+  activeLightDirectionsByCoordKey: Map<string, Direction[]>,
 ): void {
   const weaponCoordKey = coordKey(weaponCoord);
 
@@ -74,11 +79,27 @@ function collectActiveAdjacentSupports(
     if (!activeWeaponDirectionByCoordKey.has(weaponCoordKey)) {
       activeWeaponDirectionByCoordKey.set(weaponCoordKey, direction);
     }
+    collectAuraLightDirection(activeLightDirectionsByCoordKey, weaponCoordKey, direction);
 
     const supportCoordKey = coordKey(neighbor.coord);
     activeSupportCoordKeys.add(supportCoordKey);
     if (!activeSupportDirectionByCoordKey.has(supportCoordKey)) {
       activeSupportDirectionByCoordKey.set(supportCoordKey, OPPOSITE_AURA_DIRECTION[direction]);
     }
+  }
+}
+
+function collectAuraLightDirection(
+  activeLightDirectionsByCoordKey: Map<string, Direction[]>,
+  coordKey: string,
+  direction: Direction,
+): void {
+  const directions = activeLightDirectionsByCoordKey.get(coordKey);
+  if (!directions) {
+    activeLightDirectionsByCoordKey.set(coordKey, [direction]);
+    return;
+  }
+  if (!directions.includes(direction)) {
+    directions.push(direction);
   }
 }
