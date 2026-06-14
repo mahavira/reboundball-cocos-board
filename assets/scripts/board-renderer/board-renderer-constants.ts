@@ -11,7 +11,7 @@ export const BALL_RADIUS = 10;
 /** 弹球图片资源路径，指向 resources/images/ball.png 的 SpriteFrame。 */
 export const BALL_SPRITE_FRAME_PATH = 'images/ball/spriteFrame';
 /** 武器尾巴图片资源路径，指向 resources/images/weapon-tail.png 的 SpriteFrame。 */
-export const WEAPON_TAIL_SPRITE_FRAME_PATH = 'images/weapon-tail/spriteFrame';
+export const WEAPON_TAIL_SPRITE_FRAME_PATH = 'images/entity/weapon-tail/spriteFrame';
 
 /**
  * 这些尺寸常量只服务当前静态棋盘渲染比例。
