@@ -37,8 +37,9 @@ export class BoardRuntimeEvents {
   emitWeaponTailCharge(weaponCoord: GridCoord, tailCoord: GridCoord): void {
     this.emitEntityChange({
       kind: 'state-changed',
-      changedCoords: [cloneCoord(weaponCoord)],
+      changedCoords: [],
       requiresPredictionRefresh: false,
+      visualOnly: true,
       tailFeedbacks: [
         {
           weaponCoord: cloneCoord(weaponCoord),

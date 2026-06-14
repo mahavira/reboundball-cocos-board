@@ -127,10 +127,10 @@ export function createEntityState(spec: EntitySpec, entityId: string): EntitySta
 export function getSegmentDurationMs(
   baseStepMs: number,
   ball: BallState,
-  durationMultiplier: number,
+  terrainDurationMultiplier: number,
 ): number {
   const fastFactor = ball.isFast ? 0.5 : 1;
-  return (baseStepMs / 2) * durationMultiplier * fastFactor;
+  return (baseStepMs / 2) * terrainDurationMultiplier * fastFactor / ball.speedMultiplier;
 }
 
 /** 获取武器实体尾部占据的格子坐标列表。 */
@@ -146,11 +146,6 @@ export function getWeaponChargeLimit(entity: Extract<EntityState, { kind: 'weapo
   return WEAPON_CHARGE_LIMITS[entity.weaponType];
 }
 
-/** 把业务语义的速度倍率转换成动画时长倍率，避免在规则代码中散落 reciprocal 写法。 */
-export function getDurationMultiplierFromSpeedMultiplier(speedMultiplier: number): number {
-  return 1 / speedMultiplier;
-}
-
 /** 混沌门的方向偏转逻辑。 */
 export function nextChaosDirection(direction: Direction, stepId: number): Direction {
   const currentIndex = DIRECTIONS.indexOf(direction);
@@ -162,23 +157,28 @@ export function rotateFacingClockwise(direction: Direction): Direction {
 }
 
 /** 构建外环管道路径，供运行时初始化时一次性缓存。 */
-export function buildPipePath(): GridCoord[] {
+export function buildPipePath(boardSize: number, entryCoord: GridCoord): GridCoord[] {
   const path: GridCoord[] = [];
+  const maxIndex = boardSize - 1;
+  const topRow = 0;
+  const leftCol = 0;
+  const rightCol = maxIndex;
+  const bottomRow = maxIndex;
 
-  for (let row = 3; row <= 6; row += 1) {
-    path.push({ row, col: 0 });
+  for (let row = entryCoord.row; row <= bottomRow; row += 1) {
+    path.push({ row, col: leftCol });
   }
-  for (let col = 1; col <= 6; col += 1) {
-    path.push({ row: 6, col });
+  for (let col = leftCol + 1; col <= rightCol; col += 1) {
+    path.push({ row: bottomRow, col });
   }
-  for (let row = 5; row >= 0; row -= 1) {
-    path.push({ row, col: 6 });
+  for (let row = bottomRow - 1; row >= topRow; row -= 1) {
+    path.push({ row, col: rightCol });
   }
-  for (let col = 5; col >= 0; col -= 1) {
-    path.push({ row: 0, col });
+  for (let col = rightCol - 1; col >= leftCol; col -= 1) {
+    path.push({ row: topRow, col });
   }
-  for (let row = 1; row <= 2; row += 1) {
-    path.push({ row, col: 0 });
+  for (let row = topRow + 1; row < entryCoord.row; row += 1) {
+    path.push({ row, col: leftCol });
   }
 
   return path;
@@ -260,9 +260,7 @@ export function resolveCenterInteraction(
     case 'rotator':
       return {
         nextDirection: getTurnerExitDirection(entity.variant, direction) ?? undefined,
-        speedMultiplier: getDurationMultiplierFromSpeedMultiplier(
-          LEVEL_SPEED_MULTIPLIERS[entity.level] ?? 1,
-        ),
+        speedMultiplier: LEVEL_SPEED_MULTIPLIERS[entity.level] ?? 1,
       };
     case 'chaos-gate':
       return {
@@ -284,7 +282,7 @@ export function resolveCenterInteraction(
   }
 }
 
-/** 统一计算单段运动时长倍率，避免运行时链路重复展开管道/减速/加速规则。 */
+/** 统一计算单段地形/管道时长倍率，速度倍率在 getSegmentDurationMs 中单独换算。 */
 export function resolveSegmentDurationMultiplier(input: SegmentDurationInput): number {
   const innerEntryCell = moveCoord(input.entryCoord, 'right');
 
@@ -293,18 +291,18 @@ export function resolveSegmentDurationMultiplier(input: SegmentDurationInput): n
       sameCoord(input.fromCell, input.entryCoord) &&
       sameCoord(input.toCell, innerEntryCell)
     ) {
-      return 1;
+      return input.ball.speedMultiplier;
     }
 
     if (isPipeSegment(input.fromCell, input.ball.direction, input.entryCoord, input.boardSize)) {
-      return 0.1;
+      return input.ball.speedMultiplier / 10;
     }
 
     if (input.currentEntity?.kind === 'slow-zone') {
       return 2.5;
     }
 
-    return input.ball.speedMultiplier;
+    return 1;
   }
 
   if (input.targetEntity?.kind === 'slow-zone') {
@@ -315,7 +313,7 @@ export function resolveSegmentDurationMultiplier(input: SegmentDurationInput): n
     sameCoord(input.fromCell, input.entryCoord) &&
     sameCoord(input.toCell, innerEntryCell)
   ) {
-    return 1;
+    return input.ball.speedMultiplier;
   }
   // 进入外环管道时无论从哪里来都加速，但出口转内区时不加速
   if (isOuterRingCoord(input.toCell, input.boardSize) && !isOuterRingCoord(input.fromCell, input.boardSize)) {
@@ -323,10 +321,10 @@ export function resolveSegmentDurationMultiplier(input: SegmentDurationInput): n
   }
 
   if (isOuterRingCoord(input.toCell, input.boardSize) && isOuterRingCoord(input.fromCell, input.boardSize)) {
-    return 0.1;
+    return input.ball.speedMultiplier / 10;
   }
 
-  return input.ball.speedMultiplier;
+  return 1;
 }
 
 /** 判断 from→to 是否为外环管道段，入口右转进入内区不算。 */

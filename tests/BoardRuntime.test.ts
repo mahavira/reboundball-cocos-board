@@ -94,6 +94,50 @@ test('connected turner changes direction at target center', () => {
   assert.equal(step.finalDirection, 'up');
 });
 
+test('turner stores real speed multiplier and shortens later movement duration', () => {
+  const runtime = createRuntime({
+    entities: [
+      {
+        kind: 'turner',
+        coord: { row: 3, col: 1 },
+        variant: 'left-up',
+        level: 5,
+      },
+    ],
+  });
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  const turnerStep = runtime.tickBall('ball-1');
+  const ballAfterTurner = runtime.getBallStates()[0];
+  const nextStep = runtime.tickBall('ball-1');
+
+  assert.equal(turnerStep.finalDirection, 'up');
+  assert.equal(ballAfterTurner.speedMultiplier, 6);
+  assert.equal(nextStep.segments[0].durationMs, 400 / 6);
+});
+
+test('black hole resets speed multiplier after a boosted ball enters center', () => {
+  const runtime = createRuntime({
+    entities: [
+      {
+        kind: 'turner',
+        coord: { row: 3, col: 1 },
+        variant: 'left-up',
+        level: 5,
+      },
+      { kind: 'black-hole', coord: { row: 2, col: 1 } },
+    ],
+  });
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  runtime.tickBall('ball-1');
+  const blackHoleStep = runtime.tickBall('ball-1');
+  const ballAfterBlackHole = runtime.getBallStates()[0];
+
+  assert.equal(blackHoleStep.outcome, 'teleported');
+  assert.equal(ballAfterBlackHole.speedMultiplier, 1);
+});
+
 test('rotator rotates only after successful leave', () => {
   const runtime = createRuntime({
     entities: [

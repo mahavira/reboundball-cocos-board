@@ -5,7 +5,7 @@ import {
   buildPipePath,
   canEnterEntity,
   createEntityState,
-  getDurationMultiplierFromSpeedMultiplier,
+  getSegmentDurationMs,
   getTurnerExitDirection,
   getWeaponChargeLimit,
   getWeaponTailCells,
@@ -17,6 +17,7 @@ import {
   rotateFacingClockwise,
   rotateVariantClockwise,
 } from '../assets/scripts/board-runtime/board-runtime-rules.ts';
+import { BOARD_SIZE, DEFAULT_ENTRY } from '../assets/scripts/board-runtime/constants.ts';
 
 test('turner and facing rules keep current runtime semantics', () => {
   assert.equal(rotateVariantClockwise('right-up'), 'right-down');
@@ -24,11 +25,6 @@ test('turner and facing rules keep current runtime semantics', () => {
   assert.equal(getTurnerExitDirection('right-up', 'right'), null);
   assert.equal(rotateFacingClockwise('up'), 'right');
   assert.equal(nextChaosDirection('up', 0), 'right');
-});
-
-test('speed-to-duration helper keeps reciprocal timing semantics explicit', () => {
-  assert.equal(getDurationMultiplierFromSpeedMultiplier(1), 1);
-  assert.equal(getDurationMultiplierFromSpeedMultiplier(2.5), 0.4);
 });
 
 test('weapon runtime helpers derive tail cells and charge limit from entity state', () => {
@@ -52,7 +48,7 @@ test('weapon runtime helpers derive tail cells and charge limit from entity stat
 });
 
 test('pipe helpers preserve clockwise outer-ring traversal semantics', () => {
-  const pipePath = buildPipePath();
+  const pipePath = buildPipePath(BOARD_SIZE, DEFAULT_ENTRY);
   const pipeIndexByKey = new Map(pipePath.map((coord, index) => [`${coord.row},${coord.col}`, index]));
 
   assert.equal(pipePath.length, 24);
@@ -70,10 +66,20 @@ test('entity interaction helpers preserve blocking and center effects', () => {
     { kind: 'turner', coord: { row: 3, col: 1 }, variant: 'left-up', level: 2 },
     2,
   );
+  const levelOneTurner = createEntityState(
+    { kind: 'turner', coord: { row: 3, col: 1 }, variant: 'left-up', level: 1 },
+    3,
+  );
+  const levelFiveTurner = createEntityState(
+    { kind: 'turner', coord: { row: 3, col: 1 }, variant: 'left-up', level: 5 },
+    4,
+  );
 
   assert.equal(canEnterEntity(turner, 'right'), true);
   assert.equal(canEnterEntity(iceBlock, 'right'), false);
   assert.deepEqual(handleBlockedEntityHit(iceBlock), { removeSelf: true });
+  assert.equal(resolveCenterInteraction(levelOneTurner, 'right', 4, { row: 3, col: 0 }).speedMultiplier, 1.5);
+  assert.equal(resolveCenterInteraction(levelFiveTurner, 'right', 4, { row: 3, col: 0 }).speedMultiplier, 6);
   assert.deepEqual(resolveCenterInteraction(blackHole, 'right', 4, { row: 3, col: 0 }), {
     teleportTo: { row: 3, col: 0 },
     resetDirection: 'right',
@@ -130,5 +136,14 @@ test('segment duration helper keeps entry, pipe, and slow-zone timing rules', ()
       phase: 'to-target',
     }),
     2.5,
+  );
+
+  assert.equal(
+    getSegmentDurationMs(
+      800,
+      { ...ball, speedMultiplier: 2 },
+      1,
+    ),
+    200,
   );
 });

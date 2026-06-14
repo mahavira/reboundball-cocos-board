@@ -1,5 +1,6 @@
 import { cloneCoord } from '../shared/helpers.ts';
 import { buildPipePath } from './board-runtime-rules.ts';
+import { BOARD_SIZE } from './constants.ts';
 import type {
   BallProgress,
   BallProgressEvent,
@@ -94,7 +95,7 @@ export class BoardRuntime {
   constructor(preset: BoardPreset) {
     this.entryCoord = cloneCoord(preset.entryCoord);
     this.baseStepMs = preset.baseStepMs;
-    this.pipePath = buildPipePath();
+    this.pipePath = buildPipePath(BOARD_SIZE, this.entryCoord);
     this.pipeIndexByKey = createPipeIndex(this.pipePath);
 
     this.entities.loadEntities(preset.entities);

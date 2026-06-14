@@ -45,7 +45,7 @@ export class BoardPresentationRefresher {
     if (event.kind === 'reset') {
       this.pendingRefresh.needsFullEntityRefresh = true;
       this.pendingRefresh.changedCoordsByKey.clear();
-    } else {
+    } else if (!event.visualOnly) {
       this.collectChangedCoords(event.changedCoords);
     }
 
@@ -63,7 +63,7 @@ export class BoardPresentationRefresher {
     if (this.pendingRefresh.needsFullEntityRefresh) {
       this.refreshEntityPresentation();
     } else if (this.pendingRefresh.changedCoordsByKey.size > 0) {
-      this.refreshEntityPresentation();
+      this.refreshChangedEntityPresentation();
     }
 
     if (this.pendingRefresh.needsPredictionRefresh) {

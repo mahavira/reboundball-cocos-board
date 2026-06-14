@@ -3,7 +3,7 @@ import { BoardBootstrap } from '../board-bootstrap/BoardBootstrap.ts';
 import { createBoardDebugApi, formatBoardDebugStatus } from './board-debug-api';
 import type { BoardDebugHost } from '../shared/types.ts';
 
-const { ccclass } = _decorator;
+const { ccclass, property } = _decorator;
 
 const DEBUG_CONSOLE_PATH = 'globalThis.boardDebug';
 
@@ -15,18 +15,22 @@ const DEBUG_CONSOLE_PATH = 'globalThis.boardDebug';
  */
 @ccclass('BoardDebugController')
 export class BoardDebugController extends Component {
+  @property(BoardBootstrap)
+  private boardBootstrap: BoardBootstrap | null = null;
+
   private boardHost: BoardDebugHost | null = null;
   private statusLabelNode: Node | null = null;
   private statusLabel: Label | null = null;
   private lastStatusText = '';
 
   /**
-   * 调试组件独立挂载在场景中，自行查找主棋盘组件。
+   * 调试组件通过 Inspector 显式绑定主棋盘组件；同节点挂载仅作为兼容兜底。
    * 主棋盘只暴露显式 host 契约，调试组件不读取其私有字段。
    */
   onLoad(): void {
-    const boardBootstrap = this.node.getComponent(BoardBootstrap);
+    const boardBootstrap = this.boardBootstrap ?? this.node.getComponent(BoardBootstrap);
     if (!boardBootstrap) {
+      console.warn('BoardDebugController requires a BoardBootstrap reference.');
       return;
     }
 

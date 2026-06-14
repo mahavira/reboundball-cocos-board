@@ -2,6 +2,7 @@ import {
   buildPipePath,
   canEnterEntity,
   resolveCenterInteraction,
+  rotateVariantClockwise,
 } from '../board-runtime/board-runtime-rules.ts';
 import { BOARD_SIZE } from '../board-runtime/constants.ts';
 import { cloneCoord, coordKey } from '../shared/helpers.ts';
@@ -31,17 +32,19 @@ type PredictionStepOutcome = {
 
 /**
  * 共享路径预测器只读取运行时快照，用本地状态模拟“若有一颗新球从入口重新出发”的轨迹。
- * 该模拟不会写回任何实体或弹球状态，因此只反映当前静态布局，而不复用真实运行时副作用。
+ * 该模拟不会写回真实 runtime；但会在内部快照上模拟会影响后续路径的必要规则副作用。
  */
 export class BoardPathPredictor {
   private readonly entryCoord: GridCoord;
   private readonly entityMap = new Map<string, EntityState>();
-  private readonly pipePath = buildPipePath();
-  private readonly pipeIndexByKey = createPipeIndex(this.pipePath);
+  private pipePath: GridCoord[];
+  private pipeIndexByKey: Map<string, number>;
   private readonly maxSteps: number;
 
   constructor(snapshot: PredictionBoardSnapshot, options?: PredictionPathOptions) {
     this.entryCoord = cloneCoord(snapshot.entryCoord);
+    this.pipePath = buildPipePath(BOARD_SIZE, this.entryCoord);
+    this.pipeIndexByKey = createPipeIndex(this.pipePath);
     this.maxSteps = options?.maxSteps ?? 128;
     this.applySnapshot(snapshot);
   }
@@ -50,6 +53,8 @@ export class BoardPathPredictor {
   applySnapshot(snapshot: PredictionBoardSnapshot): void {
     this.entryCoord.row = snapshot.entryCoord.row;
     this.entryCoord.col = snapshot.entryCoord.col;
+    this.pipePath = buildPipePath(BOARD_SIZE, this.entryCoord);
+    this.pipeIndexByKey = createPipeIndex(this.pipePath);
     this.entityMap.clear();
     snapshot.entities.forEach((entity) => {
       this.entityMap.set(coordKey(entity.coord), structuredClone(entity));
@@ -122,6 +127,7 @@ export class BoardPathPredictor {
     const movementSegment = this.createSegment(currentCell, targetCell, currentDirection);
     const points = [cloneCoord(targetCell)];
 
+    this.rotateCurrentRotatorIfNeeded(currentEntity);
     state.cell = cloneCoord(targetCell);
 
     if (targetEntity?.kind === 'chaos-gate') {
@@ -210,5 +216,13 @@ export class BoardPathPredictor {
 
   private getEntityAt(coord: GridCoord): EntityState | null {
     return this.entityMap.get(coordKey(coord)) ?? null;
+  }
+
+  private rotateCurrentRotatorIfNeeded(currentEntity: EntityState | null): void {
+    if (currentEntity?.kind !== 'rotator') {
+      return;
+    }
+
+    currentEntity.variant = rotateVariantClockwise(currentEntity.variant);
   }
 }

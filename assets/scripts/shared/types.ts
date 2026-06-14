@@ -240,6 +240,8 @@ export type BoardEntityChangeEvent = {
   changedCoords: GridCoord[];
   requiresPredictionRefresh: boolean;
   tailFeedbacks?: WeaponTailFeedback[];
+  /** 纯视觉事件不代表实体布局或规则状态需要重建展示节点。 */
+  visualOnly?: boolean;
 };
 
 /** 商店只售卖可拖拽放置到棋盘的 turner / weapon / support 商品。 */
@@ -376,7 +378,7 @@ export type CenterInteractionResult = CenterResult & {
   speedMultiplier?: number;
 };
 
-/** 单段位移动画时长倍率计算所需的上下文。 */
+/** 单段位移动画时长计算所需的上下文。 */
 export type SegmentDurationInput = {
   ball: BallState;
   fromCell: GridCoord;

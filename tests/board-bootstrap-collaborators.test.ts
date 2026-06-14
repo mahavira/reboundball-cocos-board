@@ -370,19 +370,23 @@ test('BoardPresentationRefresher batches entity and prediction refreshes until f
   assert.equal(rendererState.renderPredictionPathCalls.length, 0);
 
   refresher.flushPendingPresentationRefreshes();
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
-  assert.deepEqual(rendererState.rebuildEntityLayerCalls[0], runtimeState.entities);
-  assert.deepEqual(rendererState.updateEntityNodeCalls, []);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
+  assert.deepEqual(rendererState.updateEntityNodeCalls, [
+    {
+      coord: { row: 3, col: 1 },
+      entity: runtimeState.entities[0],
+    },
+  ]);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
   assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, []);
 
   refresher.flushPendingPresentationRefreshes();
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
-  assert.equal(rendererState.updateEntityNodeCalls.length, 0);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
+  assert.equal(rendererState.updateEntityNodeCalls.length, 1);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
 });
 
-test('BoardPresentationRefresher plays only the charged weapon tail feedback after state changes refresh', () => {
+test('BoardPresentationRefresher plays charged weapon tail feedback without rebuilding entity nodes', () => {
   const { runtime } = createRefresherRuntimeStub();
   const { renderer, rendererState } = createRefresherRendererStub();
   const refresher = new BoardPresentationRefresher({
@@ -393,8 +397,9 @@ test('BoardPresentationRefresher plays only the charged weapon tail feedback aft
 
   refresher.handleEntityChange({
     kind: 'state-changed',
-    changedCoords: [{ row: 3, col: 1 }],
+    changedCoords: [],
     requiresPredictionRefresh: false,
+    visualOnly: true,
     tailFeedbacks: [
       {
         weaponCoord: { row: 3, col: 1 },
@@ -404,7 +409,7 @@ test('BoardPresentationRefresher plays only the charged weapon tail feedback aft
   });
   refresher.flushPendingPresentationRefreshes();
 
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
   assert.deepEqual(rendererState.updateEntityNodeCalls, []);
   assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, [
     {
@@ -430,7 +435,8 @@ test('BoardPresentationRefresher does not play tail feedback for generic state c
   });
   refresher.flushPendingPresentationRefreshes();
 
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
+  assert.equal(rendererState.updateEntityNodeCalls.length, 1);
   assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, []);
 });
 

@@ -139,6 +139,31 @@ test('predictor does not mutate the runtime entity snapshot it reads from', () =
   assert.equal(entityAfterPrediction?.kind === 'rotator' ? entityAfterPrediction.variant : null, 'left-up');
 });
 
+test('predictor simulates rotator side effects inside its own snapshot', () => {
+  const entities: EntitySpec[] = [
+    { kind: 'rotator', coord: { row: 3, col: 1 }, variant: 'left-up', level: 1 },
+    { kind: 'turner', coord: { row: 2, col: 1 }, variant: 'left-down', level: 1 },
+  ];
+  const runtime = new BoardRuntime(createBoardPreset({ entities }));
+  const predictor = new BoardPathPredictor(
+    {
+      entryCoord: runtime.getEntryCoord(),
+      entities: runtime.getEntities(),
+    },
+    { maxSteps: 7 },
+  );
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  const runtimeSteps = Array.from({ length: 4 }, () => runtime.tickBall('ball-1'));
+  const prediction = predictor.predictSharedPath();
+
+  assert.deepEqual(
+    prediction.segments.slice(0, 4).map((segment) => segment.to),
+    runtimeSteps.map((step) => step.finalCell),
+  );
+  assert.equal(prediction.terminationReason, 'looped');
+});
+
 test('predictor and runtime share entry, turner, and blocked-bounce path rules', () => {
   const { prediction, runtimeSteps } = createRuntimePredictionComparison([
     { kind: 'turner', coord: { row: 3, col: 1 }, variant: 'left-up', level: 1 },

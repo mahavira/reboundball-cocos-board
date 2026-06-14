@@ -161,8 +161,10 @@ function loadEntityIconSpriteFrame(iconKey: EntityIconKey): void {
   loadingEntityIconKeys.add(iconKey);
   const path = `images/entity/${iconKey}/spriteFrame`;
   resources.load(path, SpriteFrame, (error, spriteFrame) => {
+    loadingEntityIconKeys.delete(iconKey);
     if (error) {
       console.warn(`Failed to load ${path}`, error);
+      prunePendingEntityIconHosts(iconKey);
       return;
     }
 
@@ -183,6 +185,23 @@ function flushPendingEntityIconHosts(iconKey: EntityIconKey, spriteFrame: Sprite
     }
   }
   pendingEntityIconHosts.delete(iconKey);
+}
+
+function prunePendingEntityIconHosts(iconKey: EntityIconKey): void {
+  const pendingHosts = pendingEntityIconHosts.get(iconKey);
+  if (!pendingHosts) {
+    return;
+  }
+
+  for (const pendingHost of pendingHosts) {
+    if (!pendingHost.hostNode.isValid) {
+      pendingHosts.delete(pendingHost);
+    }
+  }
+
+  if (pendingHosts.size === 0) {
+    pendingEntityIconHosts.delete(iconKey);
+  }
 }
 
 function mountWeaponTailVisual(hostNode: Node, direction: Direction): void {
@@ -208,6 +227,8 @@ function loadWeaponTailSpriteFrame(): void {
   resources.load(WEAPON_TAIL_SPRITE_FRAME_PATH, SpriteFrame, (error, spriteFrame) => {
     if (error) {
       console.warn(`Failed to load ${WEAPON_TAIL_SPRITE_FRAME_PATH}`, error);
+      isWeaponTailSpriteFrameLoadStarted = false;
+      prunePendingWeaponTailHosts();
       return;
     }
 
@@ -224,6 +245,14 @@ function flushPendingWeaponTailHosts(): void {
     }
   }
   pendingWeaponTailHosts.clear();
+}
+
+function prunePendingWeaponTailHosts(): void {
+  for (const pendingHost of pendingWeaponTailHosts) {
+    if (!pendingHost.hostNode.isValid) {
+      pendingWeaponTailHosts.delete(pendingHost);
+    }
+  }
 }
 
 function mountWeaponTailSprite(hostNode: Node, direction: Direction): void {

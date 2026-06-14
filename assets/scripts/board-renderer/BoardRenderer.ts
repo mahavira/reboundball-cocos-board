@@ -17,6 +17,7 @@ import {
   type ActiveSupportAuraState,
 } from '../board-runtime/SupportAuraActivation.ts';
 import { buildPipePath } from '../board-runtime/board-runtime-rules.ts';
+import { BOARD_SIZE, DEFAULT_ENTRY } from '../board-runtime/constants.ts';
 import { getGridFillRgba, getPlacementHighlightPalette } from './board-renderer-style.ts';
 import { createShopPlacementSpec } from '../shop/ShopItemFactory.ts';
 import { coordKey } from '../shared/helpers.ts';
@@ -486,7 +487,7 @@ export class BoardRenderer {
 
     this.boardPipeLayerNode.destroyAllChildren();
 
-    const pipePath = buildPipePath();
+    const pipePath = buildPipePath(BOARD_SIZE, DEFAULT_ENTRY);
     for (let index = 0; index < pipePath.length; index += 1) {
       const coord = pipePath[index];
       const previousCoord = pipePath[(index - 1 + pipePath.length) % pipePath.length];
