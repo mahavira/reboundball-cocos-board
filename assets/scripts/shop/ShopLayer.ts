@@ -1,9 +1,10 @@
-import { _decorator, Color, Component, EventTouch, Node, Sprite } from 'cc';
+import { _decorator, Color, Component, EventTouch, Label, Node, Sprite } from 'cc';
 
 import { BoardBootstrap } from '../board-bootstrap/BoardBootstrap.ts';
 import { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import { createRandomShopItems } from './ShopItemFactory.ts';
 import { ShopDragController } from './ShopDragController.ts';
+import { SHOP_REFRESH_GOLD_COST } from './shop-gold-rules.ts';
 import type {
   BoardShopHost,
   ShopItemDefinition,
@@ -14,6 +15,7 @@ const { ccclass, property } = _decorator;
 type ShopSlotContext = {
   slotNode: Node;
   entityNode: Node;
+  priceLabel: Label | null;
   item: ShopItemDefinition | null;
 };
 
@@ -37,6 +39,10 @@ export class ShopLayer extends Component {
 
   private readonly slotContexts: ShopSlotContext[] = [];
   private dragController: ShopDragController | null = null;
+  private shopHost: BoardShopHost | null = null;
+  private goldLabel: Label | null = null;
+  private goldLabelDefaultColor: Color | null = null;
+  private unsubscribeGoldBalance: (() => void) | null = null;
 
   onLoad(): void {
     const boardBootstrap = this.node.parent?.getComponent(BoardBootstrap);
@@ -45,10 +51,15 @@ export class ShopLayer extends Component {
     }
 
     const host = boardBootstrap.getShopHost();
+    this.shopHost = host;
+    this.goldLabel = this.resolveGoldLabel();
+    this.goldLabelDefaultColor = this.goldLabel ? this.goldLabel.color.clone() : null;
+    this.unsubscribeGoldBalance = host.onGoldBalanceChanged((balance) => this.updateGoldLabel(balance));
     this.initializeSlotContexts();
     this.dragController = new ShopDragController({
       host,
       onPlacementSuccess: (slotIndex) => this.consumeSlot(slotIndex),
+      onPurchaseBlocked: () => this.showInsufficientGoldFeedback(),
     });
     this.bindStaticEvents(host);
     this.refreshShopItems();
@@ -57,6 +68,8 @@ export class ShopLayer extends Component {
   onDestroy(): void {
     this.dragController?.cancelActiveDrag();
     this.dragController = null;
+    this.unsubscribeGoldBalance?.();
+    this.unsubscribeGoldBalance = null;
 
     // 显式解绑 bindStaticEvents 中注册的全部事件，避免节点被动态移除时残留监听
     this.refreshButtonNode?.off(Node.EventType.TOUCH_END);
@@ -89,6 +102,7 @@ export class ShopLayer extends Component {
     const slotContext = this.slotContexts[slotIndex];
     slotContext.item = item;
     BoardRenderer.renderShopItemIcon(slotContext.entityNode, item);
+    this.updateSlotPriceLabel(slotContext);
     this.updateSlotVisualState(slotContext);
   }
 
@@ -106,6 +120,7 @@ export class ShopLayer extends Component {
       this.slotContexts.push({
         slotNode,
         entityNode,
+        priceLabel: slotNode.getChildByName('Label')?.getComponent(Label) ?? null,
         item: null,
       });
     });
@@ -138,6 +153,11 @@ export class ShopLayer extends Component {
   }
 
   private handleRefreshTouched(): void {
+    if (!this.shopHost?.trySpendGold(SHOP_REFRESH_GOLD_COST)) {
+      this.showInsufficientGoldFeedback();
+      return;
+    }
+
     this.dragController?.cancelActiveDrag();
     this.refreshShopItems();
   }
@@ -173,5 +193,69 @@ export class ShopLayer extends Component {
     backgroundSprite.color = slotContext.item
       ? new Color(255, 255, 255, 255)
       : new Color(180, 180, 180, 180);
+  }
+
+  private updateGoldLabel(balance: number): void {
+    if (!this.goldLabel) {
+      return;
+    }
+
+    this.goldLabel.string = `${balance}`;
+  }
+
+  private updateSlotPriceLabel(slotContext: ShopSlotContext): void {
+    if (!slotContext.priceLabel) {
+      return;
+    }
+
+    slotContext.priceLabel.string = slotContext.item ? `${slotContext.item.price}` : '';
+  }
+
+  /** 余额不足先反馈到金币 HUD，避免经济规则失败时静默吞掉玩家操作。 */
+  private showInsufficientGoldFeedback(): void {
+    if (this.goldLabel) {
+      const goldLabel = this.goldLabel;
+      goldLabel.color = new Color(220, 38, 38, 255);
+      this.scheduleOnce(() => {
+        if (goldLabel.isValid && this.goldLabelDefaultColor) {
+          goldLabel.color = this.goldLabelDefaultColor;
+        }
+      }, 0.2);
+    }
+
+    console.warn('Not enough gold');
+  }
+
+  private resolveGoldLabel(): Label | null {
+    const sceneRootNode = this.findSceneRootNode();
+    return this.findDescendantByName(sceneRootNode, 'GoldCoinNumber')?.getComponent(Label) ?? null;
+  }
+
+  private findSceneRootNode(): Node {
+    let currentNode = this.node;
+    while (currentNode.parent) {
+      currentNode = currentNode.parent;
+    }
+
+    return currentNode;
+  }
+
+  private findDescendantByName(rootNode: Node | null | undefined, nodeName: string): Node | null {
+    if (!rootNode) {
+      return null;
+    }
+
+    if (rootNode.name === nodeName) {
+      return rootNode;
+    }
+
+    for (const childNode of rootNode.children) {
+      const result = this.findDescendantByName(childNode, nodeName);
+      if (result) {
+        return result;
+      }
+    }
+
+    return null;
   }
 }

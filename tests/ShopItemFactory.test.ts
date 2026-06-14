@@ -6,8 +6,8 @@ import {
   createShopPlacementSpec,
 } from '../assets/scripts/shop/ShopItemFactory.ts';
 
-test('refresh creates 3 shop items that only contain turners and weapons', () => {
-  const values = [0.0, 0.2, 0.7, 0.9, 0.45, 0.1];
+test('refresh creates a fixed first turner and then random weapon or turner items', () => {
+  const values = [0.2, 0.4, 0.7, 0.9, 0.6, 0.1];
   let index = 0;
   const items = createRandomShopItems(3, () => values[index++]);
 
@@ -20,13 +20,17 @@ test('refresh creates 3 shop items that only contain turners and weapons', () =>
 
 test('turner items are always level 1 and weapon items convert facing into tailDirections', () => {
   const turner = createRandomShopItems(1, () => 0.1)[0];
-  const weapon = createRandomShopItems(1, () => 0.6)[0];
+  const weaponValues = [0.1, 0.4, 0.25, 0.6];
+  let weaponValueIndex = 0;
+  const weapon = createRandomShopItems(2, () => weaponValues[weaponValueIndex++])[1];
 
   assert.equal(turner.kind, 'turner');
   assert.equal(turner.level, 1);
+  assert.equal(turner.price, 5);
 
   assert.equal(weapon.kind, 'weapon');
   assert.equal(weapon.level, 1);
+  assert.equal(weapon.price, 16);
   assert.deepEqual(createShopPlacementSpec(weapon, { row: 1, col: 2 }), {
     kind: 'weapon',
     coord: { row: 1, col: 2 },

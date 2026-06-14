@@ -3,7 +3,9 @@ import {
   TURNER_VARIANTS,
   WEAPON_TYPES,
 } from '../shared/entity-definitions.ts';
-import { RANDOM_SHOP_ENTITY_KINDS } from '../shared/entity-registry.ts';
+import {
+  getShopItemGoldPrice,
+} from './shop-gold-rules.ts';
 import type {
   EntitySpec,
   EntityState,
@@ -15,7 +17,8 @@ import type {
 
 /**
  * 生成商店商品列表。
- * 商品池只包含普通转向器与武器，等级统一从 1 开始，避免把升级经济规则混入商店层。
+ * 第一个槽位固定转向器，其余槽位按 50% 武器 / 50% 转向器生成。
+ * 等级统一从 1 开始，避免把升级经济规则混入商店层。
  */
 export function createRandomShopItems(
   count: number,
@@ -111,34 +114,39 @@ export function createPlacementSpecFromEntity(
 
 function createRandomShopItem(index: number, randomFn: () => number): ShopItemDefinition {
   const itemId = `shop-item-${index}`;
-  const kind = RANDOM_SHOP_ENTITY_KINDS[getRandomIndex(RANDOM_SHOP_ENTITY_KINDS.length, randomFn)];
-
-  switch (kind) {
-    case 'turner':
-      return createTurnerItem(itemId, randomFn);
-    case 'weapon':
-      return createWeaponItem(itemId, randomFn);
+  if (index === 0) {
+    return createTurnerItem(itemId, randomFn);
   }
+
+  return randomFn() < 0.5
+    ? createWeaponItem(itemId, randomFn)
+    : createTurnerItem(itemId, randomFn);
 }
 
 function createTurnerItem(itemId: string, randomFn: () => number): TurnerShopItemDefinition {
-  return {
+  const item: TurnerShopItemDefinition = {
     itemId,
     kind: 'turner',
     variant: TURNER_VARIANTS[getRandomIndex(TURNER_VARIANTS.length, randomFn)],
     level: 1,
+    price: 0,
   };
+  item.price = getShopItemGoldPrice(item);
+  return item;
 }
 
 function createWeaponItem(itemId: string, randomFn: () => number): WeaponShopItemDefinition {
-  return {
+  const item: WeaponShopItemDefinition = {
     itemId,
     kind: 'weapon',
     weaponType: WEAPON_TYPES[getRandomIndex(WEAPON_TYPES.length, randomFn)],
     facing: DIRECTIONS[getRandomIndex(DIRECTIONS.length, randomFn)],
     tailDirections: undefined,
     level: 1,
+    price: 0,
   };
+  item.price = getShopItemGoldPrice(item);
+  return item;
 }
 
 function getRandomIndex(length: number, randomFn: () => number): number {

@@ -4,10 +4,15 @@ import { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import { BoardRuntime } from '../board-runtime/BoardRuntime.ts';
 import { cloneCoord } from '../shared/helpers.ts';
 import { ShopDragController } from '../shop/ShopDragController.ts';
+import {
+  getEntityRecycleGoldRefund,
+  INITIAL_GOLD_BALANCE,
+} from '../shop/shop-gold-rules.ts';
 import { canDragEntityFromBoard, canRecycleEntityFromBoard } from '../shared/entity-registry.ts';
 import type {
   BoardPlacementSource,
   BoardShopHost,
+  EntityState,
   UiPoint,
 } from '../shared/types.ts';
 
@@ -28,6 +33,8 @@ export class BoardDragBridge {
   private readonly renderer: BoardRenderer;
   private readonly dragController: ShopDragController;
   private readonly recoveryNode: Node | null;
+  private goldBalance = INITIAL_GOLD_BALANCE;
+  private readonly goldBalanceListeners = new Set<(balance: number) => void>();
 
   constructor(options: BoardDragBridgeOptions) {
     this.rootNode = options.rootNode;
@@ -69,6 +76,7 @@ export class BoardDragBridge {
       canRecyclePlacedEntity: (source) => canRecycleEntityFromBoard(source.entity),
       recyclePlacedEntity: (source) => {
         this.runtime.removeEntity(source.coord);
+        this.addGold(getEntityRecycleGoldRefund(source.entity));
       },
       spawnBall: () => {
         this.runtime.spawnBall({ isFast: false });
@@ -88,7 +96,56 @@ export class BoardDragBridge {
           previewHandle.destroy();
         }
       },
+      getGoldBalance: () => this.goldBalance,
+      trySpendGold: (amount) => this.trySpendGold(amount),
+      addGold: (amount) => this.addGold(amount),
+      getRecycleRefund: (entity) => this.getRecycleRefund(entity),
+      onGoldBalanceChanged: (listener) => this.onGoldBalanceChanged(listener),
     };
+  }
+
+  private trySpendGold(amount: number): boolean {
+    if (amount <= 0) {
+      return true;
+    }
+
+    if (this.goldBalance < amount) {
+      return false;
+    }
+
+    this.setGoldBalance(this.goldBalance - amount);
+    return true;
+  }
+
+  private addGold(amount: number): void {
+    if (amount <= 0) {
+      return;
+    }
+
+    this.setGoldBalance(this.goldBalance + amount);
+  }
+
+  private getRecycleRefund(entity: EntityState): number {
+    return canRecycleEntityFromBoard(entity)
+      ? getEntityRecycleGoldRefund(entity)
+      : 0;
+  }
+
+  private onGoldBalanceChanged(listener: (balance: number) => void): () => void {
+    this.goldBalanceListeners.add(listener);
+    listener(this.goldBalance);
+    return () => {
+      this.goldBalanceListeners.delete(listener);
+    };
+  }
+
+  private setGoldBalance(nextBalance: number): void {
+    if (nextBalance === this.goldBalance) {
+      return;
+    }
+
+    this.goldBalance = nextBalance;
+    this.goldBalanceListeners.forEach((listener) => listener(this.goldBalance));
   }
 
   /** 把全局 UI 坐标映射回 GameRootNode 本地坐标，供拖拽预览自由跟随。 */

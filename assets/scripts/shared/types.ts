@@ -228,6 +228,7 @@ export type TurnerShopItemDefinition = {
   kind: 'turner';
   variant: TurnerVariant;
   level: number;
+  price: number;
 };
 
 /** 商店内的武器商品，固定从 1 级开始，尾巴方向由 facing 派生。 */
@@ -238,6 +239,7 @@ export type WeaponShopItemDefinition = {
   facing: Direction;
   tailDirections?: Direction[];
   level: number;
+  price: number;
 };
 
 /** UI 坐标点，供商店拖拽与棋盘放置服务交互使用。 */
@@ -280,6 +282,11 @@ export type BoardShopHost = {
   createDragPreview: (item: BoardDragItemDefinition) => unknown;
   updateDragPreviewPosition: (previewHandle: unknown, uiPoint: UiPoint) => void;
   destroyDragPreview: (previewHandle: unknown) => void;
+  getGoldBalance: () => number;
+  trySpendGold: (amount: number) => boolean;
+  addGold: (amount: number) => void;
+  getRecycleRefund: (entity: EntityState) => number;
+  onGoldBalanceChanged: (listener: (balance: number) => void) => () => void;
 };
 
 /** 共享路径预测的终止原因；null 表示预测仍可继续。 */

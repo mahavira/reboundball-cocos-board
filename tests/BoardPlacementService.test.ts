@@ -20,6 +20,7 @@ function createTurnerItem(): TurnerShopItemDefinition {
     kind: 'turner',
     variant: 'left-up',
     level: 1,
+    price: 5,
   };
 }
 
@@ -30,6 +31,7 @@ function createWeaponItem(): WeaponShopItemDefinition {
     weaponType: 'laser',
     facing: 'down',
     level: 1,
+    price: 14,
   };
 }
 
@@ -121,6 +123,11 @@ function createHost(options?: {
     },
     updateDragPreviewPosition: () => undefined,
     destroyDragPreview: () => undefined,
+    getGoldBalance: () => 200,
+    trySpendGold: () => true,
+    addGold: () => undefined,
+    getRecycleRefund: () => 0,
+    onGoldBalanceChanged: () => () => undefined,
   };
 
   return { host, placedSpecs, boardState };

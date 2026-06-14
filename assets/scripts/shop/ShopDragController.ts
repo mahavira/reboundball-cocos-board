@@ -6,6 +6,7 @@ import type {
   BoardPlacementSource,
   BoardPlacementPreview,
   BoardShopHost,
+  ShopItemDefinition,
   UiPoint,
 } from '../shared/types.ts';
 
@@ -21,6 +22,7 @@ type ActiveDragContext = {
 type ShopDragControllerOptions = {
   host: BoardShopHost;
   onPlacementSuccess: (slotIndex: number) => void;
+  onPurchaseBlocked?: (slotIndex: number, item: ShopItemDefinition) => void;
 };
 
 /**
@@ -31,6 +33,7 @@ export class ShopDragController {
   private readonly host: BoardShopHost;
   private readonly placementService: BoardPlacementService;
   private readonly onPlacementSuccess: (slotIndex: number) => void;
+  private readonly onPurchaseBlocked: ((slotIndex: number, item: ShopItemDefinition) => void) | null;
   private activeDragContext: ActiveDragContext | null = null;
   private lastPreviewFeedbackKey: string | null = null;
 
@@ -38,6 +41,7 @@ export class ShopDragController {
     this.host = options.host;
     this.placementService = new BoardPlacementService(options.host);
     this.onPlacementSuccess = options.onPlacementSuccess;
+    this.onPurchaseBlocked = options.onPurchaseBlocked ?? null;
   }
 
   startDrag(
@@ -95,12 +99,32 @@ export class ShopDragController {
       return;
     }
 
+    const activeDragContext = this.activeDragContext;
+    let spentGold = 0;
+    if (!activeDragContext.source && this.isShopItem(activeDragContext.item)) {
+      const preview = this.placementService.previewPlacement(activeDragContext.item, uiPoint);
+      if (preview.coord && (preview.state === 'placeable' || preview.state === 'mergeable')) {
+        const purchaseSucceeded = this.host.trySpendGold(activeDragContext.item.price);
+        if (!purchaseSucceeded) {
+          this.onPurchaseBlocked?.(activeDragContext.slotIndex, activeDragContext.item);
+          this.teardownActiveDrag();
+          return;
+        }
+
+        spentGold = activeDragContext.item.price;
+      }
+    }
+
     const placementResult = this.placementService.placeAtUiPoint(
-      this.activeDragContext.item,
+      activeDragContext.item,
       uiPoint,
-      this.activeDragContext.source ?? undefined,
+      activeDragContext.source ?? undefined,
     );
-    const consumedSlotIndex = placementResult.success ? this.activeDragContext.slotIndex : null;
+    const consumedSlotIndex = placementResult.success ? activeDragContext.slotIndex : null;
+    if (!placementResult.success && spentGold > 0) {
+      this.host.addGold(spentGold);
+    }
+
     this.teardownActiveDrag();
 
     if (consumedSlotIndex !== null) {
@@ -163,6 +187,10 @@ export class ShopDragController {
     }
 
     return `${preview.coord.row},${preview.coord.col}:${preview.state}`;
+  }
+
+  private isShopItem(item: BoardDragItemDefinition): item is ShopItemDefinition {
+    return 'itemId' in item;
   }
 
   private teardownActiveDrag(): void {
