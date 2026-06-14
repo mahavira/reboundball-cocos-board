@@ -30,7 +30,7 @@ import {
   WEAPON_TAIL_SPRITE_FRAME_PATH,
 } from './board-renderer-constants.ts';
 import { setNodeSize } from './board-renderer-node-utils.ts';
-import { getTurnerGlyphPath } from './board-renderer-style.ts';
+import { formatSupportName, getTurnerGlyphPath } from './board-renderer-style.ts';
 import type {
   Direction,
   EntitySpec,
@@ -50,7 +50,11 @@ type EntityIconKey =
   | 'slow-zone'
   | 'stone'
   | 'turner'
-  | 'wreckage';
+  | 'wreckage'
+  | 'damage-booster'
+  | 'gold-booster'
+  | 'crit-booster'
+  | 'charge-booster';
 
 interface PendingEntityIconHost {
   hostNode: Node;
@@ -346,6 +350,11 @@ function drawEntity(graphics: Graphics, entity: EntityState): void {
     return;
   }
 
+  if (entity.kind === 'support') {
+    drawSupportEntity(graphics, entity);
+    return;
+  }
+
   switch (entity.kind) {
     case 'slow-zone':
       drawSlowZoneEntity(graphics);
@@ -372,6 +381,27 @@ function mountEntityText(targetNode: Node, entity: EntityState): void {
   if (entity.kind === 'turner' || entity.kind === 'rotator') {
     mountLevelLabel(targetNode, entity.level);
   }
+
+  if (entity.kind === 'support') {
+    mountSupportLabel(targetNode, entity);
+  }
+}
+
+function mountSupportLabel(targetNode: Node, entity: Extract<EntityState, { kind: 'support' }>): void {
+  const labelNode = new Node('EntitySupportLabelNode');
+  labelNode.setParent(targetNode);
+  labelNode.setPosition(new Vec3(0, 0, 0));
+  setNodeSize(labelNode, 50, 18);
+
+  const label = labelNode.addComponent(Label);
+  label.string = formatSupportName(entity.supportType);
+  label.fontSize = 12;
+  label.lineHeight = 14;
+  label.horizontalAlign = HorizontalTextAlignment.CENTER;
+  label.verticalAlign = VerticalTextAlignment.CENTER;
+  label.color = new Color(15, 23, 42, 255);
+
+  mountLevelLabel(targetNode, entity.level);
 }
 
 function mountLevelLabel(targetNode: Node, level: number): void {
@@ -407,6 +437,9 @@ function drawDirectionGlyph(graphics: Graphics, variant: TurnerVariant): void {
 function getEntityIconKey(entity: EntityState): EntityIconKey {
   if (entity.kind === 'weapon') {
     return entity.weaponType;
+  }
+  if (entity.kind === 'support') {
+    return entity.supportType;
   }
   return entity.kind;
 }
@@ -458,6 +491,13 @@ function toRenderableEntity(entity: EntitySpec | EntityState): EntityState {
         facing: entity.facing,
         tailDirections: getRenderableWeaponTailDirections(entity),
         charge: getRenderableWeaponCharge(entity),
+      };
+    case 'support':
+      return {
+        kind: 'support',
+        coord: { ...entity.coord },
+        supportType: entity.supportType,
+        level: 'level' in entity && typeof entity.level === 'number' ? entity.level : 1,
       };
     case 'ice-block':
       return {
@@ -585,6 +625,16 @@ function drawWeaponEntity(
   graphics.roundRect(-WEAPON_HALF_BODY, -WEAPON_HALF_BODY, WEAPON_BODY_SIZE, WEAPON_BODY_SIZE, 8);
   graphics.fill();
   graphics.stroke();
+}
+
+function drawSupportEntity(
+  graphics: Graphics,
+  entity: Extract<EntityState, { kind: 'support' }>,
+): void {
+  graphics.fillColor = getLevelColor(entity.level);
+  graphics.strokeColor = getEntityStrokeColor(entity.level);
+  graphics.lineWidth = 2;
+  drawRoundedEntityBody(graphics, ENTITY_CORNER_RADIUS);
 }
 
 function drawRoundedEntityBody(graphics: Graphics, cornerRadius: number): void {

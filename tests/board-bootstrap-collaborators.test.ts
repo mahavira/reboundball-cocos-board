@@ -351,7 +351,7 @@ test('BallStepAnimator carries overflow delta into the next step instead of drop
 });
 
 test('BoardPresentationRefresher batches entity and prediction refreshes until flush', () => {
-  const { runtime } = createRefresherRuntimeStub();
+  const { runtime, runtimeState } = createRefresherRuntimeStub();
   const { renderer, rendererState } = createRefresherRendererStub();
   const refresher = new BoardPresentationRefresher({
     runtime: runtime as never,
@@ -370,24 +370,15 @@ test('BoardPresentationRefresher batches entity and prediction refreshes until f
   assert.equal(rendererState.renderPredictionPathCalls.length, 0);
 
   refresher.flushPendingPresentationRefreshes();
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
-  assert.deepEqual(rendererState.updateEntityNodeCalls, [
-    {
-      coord: { row: 3, col: 1 },
-      entity: {
-        kind: 'turner',
-        coord: { row: 3, col: 1 },
-        variant: 'left-up',
-        level: 1,
-      },
-    },
-  ]);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
+  assert.deepEqual(rendererState.rebuildEntityLayerCalls[0], runtimeState.entities);
+  assert.deepEqual(rendererState.updateEntityNodeCalls, []);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
   assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, []);
 
   refresher.flushPendingPresentationRefreshes();
-  assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
-  assert.equal(rendererState.updateEntityNodeCalls.length, 1);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
+  assert.equal(rendererState.updateEntityNodeCalls.length, 0);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
 });
 
@@ -413,9 +404,8 @@ test('BoardPresentationRefresher plays only the charged weapon tail feedback aft
   });
   refresher.flushPendingPresentationRefreshes();
 
-  assert.deepEqual(rendererState.updateEntityNodeCalls.map((call) => call.coord), [
-    { row: 3, col: 1 },
-  ]);
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
+  assert.deepEqual(rendererState.updateEntityNodeCalls, []);
   assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, [
     {
       weaponCoord: { row: 3, col: 1 },
@@ -440,6 +430,7 @@ test('BoardPresentationRefresher does not play tail feedback for generic state c
   });
   refresher.flushPendingPresentationRefreshes();
 
+  assert.equal(rendererState.rebuildEntityLayerCalls.length, 1);
   assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, []);
 });
 

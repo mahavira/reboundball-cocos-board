@@ -10,6 +10,7 @@ import type {
   EntityState,
   GridCoord,
   ShopItemDefinition,
+  SupportShopItemDefinition,
   TurnerShopItemDefinition,
   WeaponShopItemDefinition,
 } from '../assets/scripts/shared/types.ts';
@@ -32,6 +33,16 @@ function createWeaponItem(): WeaponShopItemDefinition {
     facing: 'down',
     level: 1,
     price: 14,
+  };
+}
+
+function createSupportItem(): SupportShopItemDefinition {
+  return {
+    itemId: 'support-1',
+    kind: 'support',
+    supportType: 'damage-booster',
+    level: 1,
+    price: 15,
   };
 }
 
@@ -96,6 +107,16 @@ function createHost(options?: {
         return;
       }
 
+      if (spec.kind === 'support') {
+        boardState.set(`${spec.coord.row},${spec.coord.col}`, {
+          kind: 'support',
+          coord: structuredClone(spec.coord),
+          supportType: spec.supportType,
+          level: spec.level ?? 1,
+        });
+        return;
+      }
+
       if (spec.kind === 'ice-block') {
         boardState.set(`${spec.coord.row},${spec.coord.col}`, {
           kind: 'ice-block',
@@ -115,6 +136,8 @@ function createHost(options?: {
     recyclePlacedEntity: (source) => {
       boardState.delete(`${source.coord.row},${source.coord.col}`);
     },
+    showRecycleFeedback: () => undefined,
+    clearRecycleFeedback: () => undefined,
     spawnBall: () => undefined,
     showPlacementHighlight: () => undefined,
     clearPlacementHighlight: () => undefined,
@@ -181,6 +204,29 @@ test('empty inner cell accepts weapon placement and derives tail from facing', (
     tailDirections: ['down'],
     level: 1,
   });
+});
+
+test('empty inner cell accepts support placement without weapon-only fields', () => {
+  const { host, placedSpecs } = createHost({
+    coord: { row: 4, col: 3 },
+  });
+  const service = new BoardPlacementService(host);
+
+  assert.deepEqual(service.previewPlacement(createSupportItem(), { x: 0, y: 0 }), {
+    state: 'placeable',
+    coord: { row: 4, col: 3 },
+  });
+
+  service.placeAtUiPoint(createSupportItem(), { x: 0, y: 0 });
+  assert.deepEqual(placedSpecs[0], {
+    kind: 'support',
+    coord: { row: 4, col: 3 },
+    supportType: 'damage-booster',
+    level: 1,
+  });
+  assert.equal('facing' in placedSpecs[0], false);
+  assert.equal('tailDirections' in placedSpecs[0], false);
+  assert.equal('charge' in placedSpecs[0], false);
 });
 
 test('entry, pipe, and outside positions are rejected', () => {
@@ -285,6 +331,39 @@ test('matching weapon becomes mergeable and keeps target facing while merging ta
   });
 });
 
+test('matching support becomes mergeable and writes upgraded support on place', () => {
+  const { host, placedSpecs, boardState } = createHost({
+    coord: { row: 2, col: 2 },
+    entity: {
+      kind: 'support',
+      coord: { row: 2, col: 2 },
+      supportType: 'damage-booster',
+      level: 1,
+    },
+  });
+  const service = new BoardPlacementService(host);
+
+  assert.deepEqual(service.previewPlacement(createSupportItem(), { x: 0, y: 0 }), {
+    state: 'mergeable',
+    coord: { row: 2, col: 2 },
+  });
+
+  const result = service.placeAtUiPoint(createSupportItem(), { x: 0, y: 0 });
+  assert.equal(result.success, true);
+  assert.deepEqual(placedSpecs[0], {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'damage-booster',
+    level: 2,
+  });
+  assert.deepEqual(boardState.get('2,2'), {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'damage-booster',
+    level: 2,
+  });
+});
+
 test('different level or occupied mismatched entity blocks placement without overwrite', () => {
   const { host, placedSpecs, boardState } = createHost({
     coord: { row: 2, col: 2 },
@@ -363,6 +442,41 @@ test('dragging placed turner to an empty inner cell moves the entity and clears 
   });
 });
 
+test('dragging placed support to an empty inner cell moves the entity and clears the source cell', () => {
+  const sourceEntity: EntityState = {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'charge-booster',
+    level: 2,
+  };
+  const { host, placedSpecs, boardState } = createHost({
+    coord: { row: 4, col: 4 },
+    entity: sourceEntity,
+  });
+  const service = new BoardPlacementService(host);
+
+  const result = service.placeAtUiPoint(
+    sourceEntity,
+    { x: 0, y: 0 },
+    createBoardSource(sourceEntity),
+  );
+
+  assert.equal(result.success, true);
+  assert.deepEqual(placedSpecs[0], {
+    kind: 'support',
+    coord: { row: 4, col: 4 },
+    supportType: 'charge-booster',
+    level: 2,
+  });
+  assert.equal(boardState.get('2,2'), undefined);
+  assert.deepEqual(boardState.get('4,4'), {
+    kind: 'support',
+    coord: { row: 4, col: 4 },
+    supportType: 'charge-booster',
+    level: 2,
+  });
+});
+
 test('dragging placed weapon onto matching weapon merges target and clears source cell', () => {
   const sourceEntity: EntityState = {
     kind: 'weapon',
@@ -423,6 +537,46 @@ test('dragging placed weapon onto matching weapon merges target and clears sourc
     facing: 'up',
     tailDirections: ['up', 'down'],
     charge: 2,
+  });
+});
+
+test('dragging placed support onto non-mergeable support swaps both entities', () => {
+  const sourceEntity: EntityState = {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'damage-booster',
+    level: 1,
+  };
+  const targetEntity: EntityState = {
+    kind: 'support',
+    coord: { row: 4, col: 4 },
+    supportType: 'gold-booster',
+    level: 1,
+  };
+  const { host, boardState } = createHost({
+    coord: { row: 4, col: 4 },
+    entity: sourceEntity,
+  });
+  boardState.set('4,4', structuredClone(targetEntity));
+  const service = new BoardPlacementService(host);
+
+  const result = service.placeAtUiPoint(
+    sourceEntity,
+    { x: 0, y: 0 },
+    createBoardSource(sourceEntity),
+  );
+  assert.equal(result.success, true);
+  assert.deepEqual(boardState.get('4,4'), {
+    kind: 'support',
+    coord: { row: 4, col: 4 },
+    supportType: 'damage-booster',
+    level: 1,
+  });
+  assert.deepEqual(boardState.get('2,2'), {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'gold-booster',
+    level: 1,
   });
 });
 

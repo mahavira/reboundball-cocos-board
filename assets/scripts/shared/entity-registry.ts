@@ -49,6 +49,15 @@ export const ENTITY_DEFINITIONS = {
     canChargeFromTail: true,
     canAppearInRandomShop: true,
   },
+  support: {
+    kind: 'support',
+    canDragFromBoard: true,
+    canSwapOnBoard: true,
+    canRecycleFromBoard: true,
+    canMergeFromPlacement: true,
+    canChargeFromTail: false,
+    canAppearInRandomShop: true,
+  },
   'slow-zone': {
     kind: 'slow-zone',
     canDragFromBoard: false,

@@ -63,7 +63,7 @@ export class BoardPresentationRefresher {
     if (this.pendingRefresh.needsFullEntityRefresh) {
       this.refreshEntityPresentation();
     } else if (this.pendingRefresh.changedCoordsByKey.size > 0) {
-      this.refreshChangedEntityPresentation();
+      this.refreshEntityPresentation();
     }
 
     if (this.pendingRefresh.needsPredictionRefresh) {

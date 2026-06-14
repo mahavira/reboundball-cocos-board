@@ -1,5 +1,6 @@
 import type {
   DIRECTIONS,
+  SUPPORT_TYPES,
   TURNER_VARIANTS,
   WEAPON_TYPES,
 } from './entity-definitions.ts';
@@ -12,6 +13,9 @@ export type TurnerVariant = (typeof TURNER_VARIANTS)[number];
 
 /** 武器类型，决定充能上限和开火效果。 */
 export type WeaponType = (typeof WEAPON_TYPES)[number];
+
+/** 辅助实体类型，决定相邻武器获得的光环效果。 */
+export type SupportType = (typeof SUPPORT_TYPES)[number];
 
 /** 棋盘格坐标，row 行号向下递增，col 列号向右递增。 */
 export type GridCoord = {
@@ -33,11 +37,19 @@ export type BallProgressEvent = {
 };
 
 /** 武器开火事件，当武器充能达到上限时触发。 */
+export type WeaponModifiers = {
+  damageMultiplier: number;
+  critChanceBonus: number;
+  chargeGainMultiplier: number;
+  onKillGoldBonus: number;
+};
+
 export type WeaponEvent = {
   type: 'weapon-fired';
   weaponId: string;
   weaponType: WeaponType;
   coord: GridCoord;
+  modifiers: WeaponModifiers;
 };
 
 /** 弹球单步移动中从一个格子到相邻格子的运动片段，用于渲染插值。 */
@@ -128,6 +140,13 @@ export type WeaponEntitySpec = BaseEntitySpec & {
   charge?: number;
 };
 
+/** 辅助实体规格。辅助不朝向、不带尾巴、不存储充能，只提供相邻光环效果。 */
+export type SupportEntitySpec = BaseEntitySpec & {
+  kind: 'support';
+  supportType: SupportType;
+  level?: number;
+};
+
 /** 实体放置规格的联合类型。 */
 export type EntitySpec =
   | TurnerEntitySpec
@@ -137,7 +156,8 @@ export type EntitySpec =
   | WreckageEntitySpec
   | IceBlockEntitySpec
   | StoneEntitySpec
-  | WeaponEntitySpec;
+  | WeaponEntitySpec
+  | SupportEntitySpec;
 
 /**
  * 实体的运行时状态。
@@ -174,6 +194,12 @@ export type EntityState =
       facing: Direction;
       tailDirections: Direction[];
       charge: number;
+    }
+  | {
+      kind: 'support';
+      coord: GridCoord;
+      supportType: SupportType;
+      level: number;
     };
 
 /** 棋盘初始化配置：入口坐标、基础步进时长（毫秒）、初始实体列表。 */
@@ -216,8 +242,11 @@ export type BoardEntityChangeEvent = {
   tailFeedbacks?: WeaponTailFeedback[];
 };
 
-/** 商店只售卖可拖拽放置到棋盘的 turner / weapon 商品。 */
-export type ShopItemDefinition = TurnerShopItemDefinition | WeaponShopItemDefinition;
+/** 商店只售卖可拖拽放置到棋盘的 turner / weapon / support 商品。 */
+export type ShopItemDefinition =
+  | TurnerShopItemDefinition
+  | WeaponShopItemDefinition
+  | SupportShopItemDefinition;
 
 /** 拖拽预览和放置判断可消费商店商品，也可消费棋盘上已有实体。 */
 export type BoardDragItemDefinition = ShopItemDefinition | EntityState;
@@ -238,6 +267,15 @@ export type WeaponShopItemDefinition = {
   weaponType: WeaponType;
   facing: Direction;
   tailDirections?: Direction[];
+  level: number;
+  price: number;
+};
+
+/** 商店内的辅助商品，固定从 1 级开始，效果由 supportType 决定。 */
+export type SupportShopItemDefinition = {
+  itemId: string;
+  kind: 'support';
+  supportType: SupportType;
   level: number;
   price: number;
 };
@@ -276,6 +314,8 @@ export type BoardShopHost = {
   isRecycleUiPoint: (uiPoint: UiPoint) => boolean;
   canRecyclePlacedEntity: (source: BoardPlacementSource) => boolean;
   recyclePlacedEntity: (source: BoardPlacementSource) => void;
+  showRecycleFeedback: (refundGold: number) => void;
+  clearRecycleFeedback: () => void;
   spawnBall: () => void;
   showPlacementHighlight: (coord: GridCoord, state: 'placeable' | 'mergeable' | 'blocked') => void;
   clearPlacementHighlight: () => void;

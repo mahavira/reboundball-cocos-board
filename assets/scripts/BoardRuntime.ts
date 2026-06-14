@@ -14,8 +14,11 @@ export type {
   GridCoord,
   MotionSegment,
   RuntimeState,
+  SupportEntitySpec,
+  SupportType,
   TurnerVariant,
   WeaponEntitySpec,
   WeaponEvent,
+  WeaponModifiers,
   WeaponType,
 } from './board-runtime/BoardRuntime.ts';

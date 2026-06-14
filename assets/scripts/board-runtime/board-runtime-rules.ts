@@ -111,6 +111,13 @@ export function createEntityState(spec: EntitySpec, entityId: string): EntitySta
         tailDirections: getWeaponTailDirections(spec),
         charge: spec.charge ?? 0,
       };
+    case 'support':
+      return {
+        kind: 'support',
+        coord: cloneCoord(spec.coord),
+        supportType: spec.supportType,
+        level: spec.level ?? 1,
+      };
     default:
       return assertNever(spec);
   }
@@ -213,6 +220,7 @@ export function canEnterEntity(entity: EntityState | null, incomingDirection: Di
     case 'ice-block':
     case 'stone':
     case 'weapon':
+    case 'support':
       return false;
     case 'slow-zone':
     case 'chaos-gate':
@@ -271,6 +279,7 @@ export function resolveCenterInteraction(
     case 'ice-block':
     case 'stone':
     case 'weapon':
+    case 'support':
       return {};
   }
 }

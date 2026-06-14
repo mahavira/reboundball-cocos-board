@@ -1,4 +1,4 @@
-import { EventTouch, Node, UITransform, Vec3 } from 'cc';
+import { Color, EventTouch, Label, Node, Sprite, UITransform, Vec3 } from 'cc';
 
 import { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import { BoardRuntime } from '../board-runtime/BoardRuntime.ts';
@@ -33,6 +33,9 @@ export class BoardDragBridge {
   private readonly renderer: BoardRenderer;
   private readonly dragController: ShopDragController;
   private readonly recoveryNode: Node | null;
+  private readonly recoveryDefaultColor: Color | null;
+  private recoveryRefundLabelNode: Node | null = null;
+  private recoveryRefundLabel: Label | null = null;
   private goldBalance = INITIAL_GOLD_BALANCE;
   private readonly goldBalanceListeners = new Set<(balance: number) => void>();
 
@@ -41,6 +44,7 @@ export class BoardDragBridge {
     this.runtime = options.runtime;
     this.renderer = options.renderer;
     this.recoveryNode = this.rootNode.getChildByName('Recovery');
+    this.recoveryDefaultColor = this.recoveryNode?.getComponent(Sprite)?.color.clone() ?? null;
     this.dragController = new ShopDragController({
       host: this.getShopHost(),
       onPlacementSuccess: () => undefined,
@@ -78,6 +82,8 @@ export class BoardDragBridge {
         this.runtime.removeEntity(source.coord);
         this.addGold(getEntityRecycleGoldRefund(source.entity));
       },
+      showRecycleFeedback: (refundGold) => this.showRecycleFeedback(refundGold),
+      clearRecycleFeedback: () => this.clearRecycleFeedback(),
       spawnBall: () => {
         this.runtime.spawnBall({ isFast: false });
       },
@@ -146,6 +152,70 @@ export class BoardDragBridge {
 
     this.goldBalance = nextBalance;
     this.goldBalanceListeners.forEach((listener) => listener(this.goldBalance));
+  }
+
+  /** 回收区是场景静态节点，动态金额标签只作为拖拽期间的临时反馈。 */
+  private showRecycleFeedback(refundGold: number): void {
+    if (!this.recoveryNode) {
+      return;
+    }
+
+    const recoverySprite = this.recoveryNode.getComponent(Sprite);
+    if (recoverySprite) {
+      recoverySprite.color = new Color(250, 204, 21, 255);
+    }
+
+    const refundLabel = this.ensureRecoveryRefundLabel();
+    if (!refundLabel) {
+      return;
+    }
+
+    refundLabel.node.active = true;
+    refundLabel.string = `+${refundGold}`;
+  }
+
+  private clearRecycleFeedback(): void {
+    if (this.recoveryNode && this.recoveryDefaultColor) {
+      const recoverySprite = this.recoveryNode.getComponent(Sprite);
+      if (recoverySprite) {
+        recoverySprite.color = this.recoveryDefaultColor;
+      }
+    }
+
+    if (this.recoveryRefundLabelNode) {
+      this.recoveryRefundLabelNode.active = false;
+    }
+  }
+
+  private ensureRecoveryRefundLabel(): Label | null {
+    if (!this.recoveryNode) {
+      return null;
+    }
+
+    if (this.recoveryRefundLabel?.isValid) {
+      return this.recoveryRefundLabel;
+    }
+
+    this.recoveryRefundLabelNode =
+      this.recoveryNode.getChildByName('RecoveryRefundLabelNode') ?? new Node('RecoveryRefundLabelNode');
+    if (!this.recoveryRefundLabelNode.parent) {
+      this.recoveryNode.addChild(this.recoveryRefundLabelNode);
+    }
+
+    const labelTransform = this.recoveryRefundLabelNode.getComponent(UITransform)
+      ?? this.recoveryRefundLabelNode.addComponent(UITransform);
+    labelTransform.setContentSize(90, 28);
+    this.recoveryRefundLabelNode.setPosition(new Vec3(0, -58, 0));
+
+    this.recoveryRefundLabel = this.recoveryRefundLabelNode.getComponent(Label)
+      ?? this.recoveryRefundLabelNode.addComponent(Label);
+    this.recoveryRefundLabel.fontSize = 22;
+    this.recoveryRefundLabel.lineHeight = 24;
+    this.recoveryRefundLabel.color = new Color(250, 204, 21, 255);
+    this.recoveryRefundLabel.horizontalAlign = Label.HorizontalAlign.CENTER;
+    this.recoveryRefundLabel.verticalAlign = Label.VerticalAlign.CENTER;
+
+    return this.recoveryRefundLabel;
   }
 
   /** 把全局 UI 坐标映射回 GameRootNode 本地坐标，供拖拽预览自由跟随。 */

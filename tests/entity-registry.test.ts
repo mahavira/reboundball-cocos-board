@@ -13,9 +13,12 @@ import {
 import type { EntityState, ShopItemDefinition } from '../assets/scripts/shared/types.ts';
 
 test('entity registry keeps current placement, shop, and charge ownership explicit', () => {
-  assert.deepEqual(RANDOM_SHOP_ENTITY_KINDS, ['turner', 'weapon']);
+  assert.deepEqual(RANDOM_SHOP_ENTITY_KINDS, ['turner', 'weapon', 'support']);
   assert.equal(getEntityDefinition('turner').canDragFromBoard, true);
   assert.equal(getEntityDefinition('weapon').canChargeFromTail, true);
+  assert.equal(getEntityDefinition('support').canChargeFromTail, false);
+  assert.equal(getEntityDefinition('support').canAppearInRandomShop, true);
+  assert.equal(getEntityDefinition('support').canRecycleFromBoard, true);
   assert.equal(getEntityDefinition('stone').canMergeFromPlacement, false);
   assert.equal(getEntityDefinition('rotator').canRecycleFromBoard, false);
 });
@@ -83,4 +86,18 @@ test('entity registry helper exposes weapon charge capability', () => {
   };
 
   assert.equal(canUseWeaponTailCharge(weapon), true);
+});
+
+test('entity registry helper keeps support out of weapon tail charge', () => {
+  const support: EntityState = {
+    kind: 'support',
+    coord: { row: 3, col: 3 },
+    supportType: 'charge-booster',
+    level: 1,
+  };
+
+  assert.equal(canDragEntityFromBoard(support), true);
+  assert.equal(canSwapEntityOnBoard(support), true);
+  assert.equal(canRecycleEntityFromBoard(support), true);
+  assert.equal(canUseWeaponTailCharge(support), false);
 });

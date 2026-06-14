@@ -94,6 +94,7 @@ export class ShopDragController {
       && this.host.isRecycleUiPoint(uiPoint)
       && this.host.canRecyclePlacedEntity(this.activeDragContext.source)
     ) {
+      this.host.clearRecycleFeedback();
       this.host.recyclePlacedEntity(this.activeDragContext.source);
       this.teardownActiveDrag();
       return;
@@ -140,9 +141,11 @@ export class ShopDragController {
       && this.host.canRecyclePlacedEntity(this.activeDragContext.source)
     ) {
       this.clearPreviewFeedback();
+      this.host.showRecycleFeedback(this.host.getRecycleRefund(this.activeDragContext.source.entity));
       return;
     }
 
+    this.host.clearRecycleFeedback();
     const preview = this.placementService.previewPlacement(
       item,
       uiPoint,
@@ -200,6 +203,7 @@ export class ShopDragController {
 
     this.host.destroyDragPreview(this.activeDragContext.previewHandle);
     this.clearPreviewFeedback();
+    this.host.clearRecycleFeedback();
     this.lastPreviewFeedbackKey = null;
     this.activeDragContext = null;
   }

@@ -177,6 +177,157 @@ test('weapon tail fires when the next step starts from a fully charged tail cent
   assert.equal(weapon?.kind === 'weapon' ? weapon.charge : null, 0);
 });
 
+test('support entity blocks ball like weapon cell', () => {
+  const runtime = createRuntime({
+    entities: [
+      {
+        kind: 'support',
+        coord: { row: 3, col: 2 },
+        supportType: 'damage-booster',
+        level: 1,
+      },
+    ],
+  });
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  runtime.tickBall('ball-1');
+  const step = runtime.tickBall('ball-1');
+
+  assert.equal(step.outcome, 'blocked');
+  assert.deepEqual(step.finalCell, { row: 3, col: 1 });
+  assert.equal(step.finalDirection, 'left');
+});
+
+test('charge-booster support increases adjacent weapon charge gain', () => {
+  const runtime = createRuntime({
+    entities: [
+      {
+        kind: 'weapon',
+        coord: { row: 3, col: 2 },
+        weaponType: 'pistol',
+        facing: 'left',
+      },
+      {
+        kind: 'support',
+        coord: { row: 2, col: 2 },
+        supportType: 'charge-booster',
+        level: 1,
+      },
+    ],
+  });
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  runtime.tickBall('ball-1');
+  runtime.tickBall('ball-1');
+
+  const weapon = runtime.getEntityAt({ row: 3, col: 2 });
+
+  assert.equal(weapon?.kind, 'weapon');
+  assert.equal(weapon?.kind === 'weapon' ? weapon.charge : null, 1.2);
+});
+
+test('charge-booster keeps overflow charge after weapon fires', () => {
+  const runtime = createRuntime({
+    entities: [
+      {
+        kind: 'weapon',
+        coord: { row: 3, col: 2 },
+        weaponType: 'pistol',
+        facing: 'left',
+        charge: 1,
+      },
+      {
+        kind: 'support',
+        coord: { row: 2, col: 2 },
+        supportType: 'charge-booster',
+        level: 1,
+      },
+    ],
+  });
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  runtime.tickBall('ball-1');
+  const step = runtime.tickBall('ball-1');
+
+  const weapon = runtime.getEntityAt({ row: 3, col: 2 });
+
+  assert.equal(step.weaponEvents.length, 1);
+  assert.equal(step.weaponEvents[0].modifiers.chargeGainMultiplier, 1.2);
+  assert.equal(weapon?.kind, 'weapon');
+  assert.equal(weapon?.kind === 'weapon' ? Math.round(weapon.charge * 10) / 10 : null, 0.2);
+});
+
+test('support aura adds weapon fire modifiers from adjacent supports', () => {
+  const runtime = createRuntime({
+    entities: [
+      {
+        kind: 'weapon',
+        coord: { row: 3, col: 2 },
+        weaponType: 'pistol',
+        facing: 'left',
+        charge: 1,
+      },
+      {
+        kind: 'support',
+        coord: { row: 2, col: 2 },
+        supportType: 'damage-booster',
+        level: 1,
+      },
+      {
+        kind: 'support',
+        coord: { row: 3, col: 3 },
+        supportType: 'gold-booster',
+        level: 1,
+      },
+      {
+        kind: 'support',
+        coord: { row: 4, col: 2 },
+        supportType: 'crit-booster',
+        level: 1,
+      },
+    ],
+  });
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  runtime.tickBall('ball-1');
+  const step = runtime.tickBall('ball-1');
+
+  assert.equal(step.weaponEvents.length, 1);
+
+  const modifiers = step.weaponEvents[0].modifiers;
+  assert.equal(modifiers.damageMultiplier, 1.2);
+  assert.equal(modifiers.onKillGoldBonus, 1);
+  assert.equal(modifiers.critChanceBonus, 0.1);
+  assert.equal(modifiers.chargeGainMultiplier, 1);
+});
+
+test('diagonal support does not affect weapon modifiers', () => {
+  const runtime = createRuntime({
+    entities: [
+      {
+        kind: 'weapon',
+        coord: { row: 3, col: 2 },
+        weaponType: 'pistol',
+        facing: 'left',
+        charge: 1,
+      },
+      {
+        kind: 'support',
+        coord: { row: 2, col: 1 },
+        supportType: 'damage-booster',
+        level: 1,
+      },
+    ],
+  });
+
+  runtime.spawnBall({ ballId: 'ball-1', isFast: false });
+  runtime.tickBall('ball-1');
+  const step = runtime.tickBall('ball-1');
+
+  assert.equal(step.weaponEvents.length, 1);
+  assert.equal(step.weaponEvents[0].modifiers.damageMultiplier, 1);
+});
+
 test('blocked step also charges when ball is already at the weapon tail center', () => {
   const runtime = createRuntime({
     entities: [

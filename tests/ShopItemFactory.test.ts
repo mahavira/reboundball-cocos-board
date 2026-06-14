@@ -7,14 +7,14 @@ import {
 } from '../assets/scripts/shop/ShopItemFactory.ts';
 
 test('refresh creates a fixed first turner and then random weapon or turner items', () => {
-  const values = [0.2, 0.4, 0.7, 0.9, 0.6, 0.1];
+  const values = [0.2, 0.4, 0.7, 0.9, 0.8, 0.1];
   let index = 0;
   const items = createRandomShopItems(3, () => values[index++]);
 
   assert.equal(items.length, 3);
   assert.deepEqual(
     items.map((item) => item.kind),
-    ['turner', 'weapon', 'turner'],
+    ['turner', 'weapon', 'support'],
   );
 });
 
@@ -37,6 +37,22 @@ test('turner items are always level 1 and weapon items convert facing into tailD
     weaponType: weapon.weaponType,
     facing: weapon.facing,
     tailDirections: [weapon.facing],
+    level: 1,
+  });
+});
+
+test('support items enter random shop and convert to support placement specs', () => {
+  const values = [0.1, 0.8, 0.75];
+  let index = 0;
+  const support = createRandomShopItems(2, () => values[index++])[1];
+
+  assert.equal(support.kind, 'support');
+  assert.equal(support.level, 1);
+  assert.equal(support.price, 15);
+  assert.deepEqual(createShopPlacementSpec(support, { row: 2, col: 3 }), {
+    kind: 'support',
+    coord: { row: 2, col: 3 },
+    supportType: support.kind === 'support' ? support.supportType : null,
     level: 1,
   });
 });

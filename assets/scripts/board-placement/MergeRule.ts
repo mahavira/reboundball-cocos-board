@@ -35,6 +35,12 @@ export function getMergePreview(
       : 'blocked';
   }
 
+  if (item.kind === 'support' && targetEntity.kind === 'support') {
+    return item.supportType === targetEntity.supportType && item.level === targetEntity.level
+      ? 'mergeable'
+      : 'blocked';
+  }
+
   return 'blocked';
 }
 
@@ -64,6 +70,15 @@ export function buildMergedEntitySpec(
       facing: targetEntity.facing,
       tailDirections: mergeTailDirections(targetEntity.tailDirections, getWeaponMergeTailDirections(item)),
       charge: targetEntity.charge,
+    };
+  }
+
+  if (item.kind === 'support' && targetEntity.kind === 'support') {
+    return {
+      kind: 'support',
+      coord: targetEntity.coord,
+      supportType: targetEntity.supportType,
+      level: Math.min(targetEntity.level + 1, 5),
     };
   }
 

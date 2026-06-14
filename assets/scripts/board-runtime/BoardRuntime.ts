@@ -14,9 +14,12 @@ import type {
   GridCoord,
   MotionSegment,
   RuntimeState,
+  SupportEntitySpec,
+  SupportType,
   TurnerVariant,
   WeaponEntitySpec,
   WeaponEvent,
+  WeaponModifiers,
   WeaponType,
 } from '../shared/types.ts';
 import { BallMotionBuilder } from './BallMotionBuilder.ts';
@@ -27,6 +30,7 @@ import type { EntityChangeKind } from './BoardRuntimeEvents.ts';
 import { createBoardPreset } from './createBoardPreset.ts';
 import { EntityMutations } from './EntityMutations.ts';
 import { EntityStore } from './EntityStore.ts';
+import { SupportAuraSystem } from './SupportAuraSystem.ts';
 import { WeaponChargeSystem } from './WeaponChargeSystem.ts';
 
 export { createBoardPreset } from './createBoardPreset.ts';
@@ -46,9 +50,12 @@ export type {
   GridCoord,
   MotionSegment,
   RuntimeState,
+  SupportEntitySpec,
+  SupportType,
   TurnerVariant,
   WeaponEntitySpec,
   WeaponEvent,
+  WeaponModifiers,
   WeaponType,
 } from '../shared/types.ts';
 
@@ -72,7 +79,12 @@ export class BoardRuntime {
   private readonly events = new BoardRuntimeEvents();
   private readonly entityMutations = new EntityMutations(this.entities, this.events);
   private readonly motionBuilder = new BallMotionBuilder();
-  private readonly weaponChargeSystem = new WeaponChargeSystem(this.entities, this.events);
+  private readonly supportAuraSystem = new SupportAuraSystem(this.entities);
+  private readonly weaponChargeSystem = new WeaponChargeSystem(
+    this.entities,
+    this.events,
+    this.supportAuraSystem,
+  );
   private readonly stepper: BallStepper;
 
   private stepIdSeed = 0;

@@ -7,6 +7,7 @@ import {
 } from '../assets/scripts/board-placement/MergeRule.ts';
 import type {
   EntityState,
+  SupportShopItemDefinition,
   TurnerShopItemDefinition,
   WeaponShopItemDefinition,
 } from '../assets/scripts/shared/types.ts';
@@ -159,6 +160,67 @@ test('weapon with different type or level cannot merge', () => {
       facing: 'up',
       tailDirections: ['up'],
       charge: 0,
+    }),
+    'blocked',
+  );
+});
+
+test('support with same type and level can merge up to level cap', () => {
+  const item: SupportShopItemDefinition = {
+    itemId: 'support-1',
+    kind: 'support',
+    supportType: 'charge-booster',
+    level: 4,
+    price: 15,
+  };
+  const target: EntityState = {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'charge-booster',
+    level: 4,
+  };
+
+  assert.equal(getMergePreview(item, target), 'mergeable');
+  assert.deepEqual(buildMergedEntitySpec(item, target), {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'charge-booster',
+    level: 5,
+  });
+
+  assert.deepEqual(buildMergedEntitySpec({ ...item, level: 5 }, { ...target, level: 5 }), {
+    kind: 'support',
+    coord: { row: 2, col: 2 },
+    supportType: 'charge-booster',
+    level: 5,
+  });
+});
+
+test('support with different type or level cannot merge', () => {
+  const item: SupportShopItemDefinition = {
+    itemId: 'support-1',
+    kind: 'support',
+    supportType: 'damage-booster',
+    level: 1,
+    price: 15,
+  };
+
+  assert.equal(
+    getMergePreview(item, {
+      kind: 'support',
+      coord: { row: 2, col: 2 },
+      supportType: 'gold-booster',
+      level: 1,
+    }),
+    'blocked',
+  );
+
+  assert.equal(
+    getMergePreview(item, {
+      kind: 'support',
+      coord: { row: 2, col: 2 },
+      supportType: 'damage-booster',
+      level: 2,
     }),
     'blocked',
   );

@@ -2,6 +2,7 @@ import type {
   BoardPlacementPreview,
   Direction,
   GridCoord,
+  SupportType,
   TurnerVariant,
   WeaponType,
 } from '../shared/types.ts';
@@ -68,6 +69,13 @@ const WEAPON_NAME_BY_TYPE: Partial<Record<WeaponType, string>> = {
   lightning: 'LIGHT',
 };
 
+const SUPPORT_NAME_BY_TYPE: Record<SupportType, string> = {
+  'damage-booster': 'ATK',
+  'gold-booster': 'GOLD',
+  'crit-booster': 'CRIT',
+  'charge-booster': 'CHG',
+};
+
 /** 纯样式映射层，只负责把方向语义转换成渲染偏移。 */
 export function getDirectionOffsetComponents(direction: Direction): [number, number, number] {
   return [...DIRECTION_OFFSET_BY_DIRECTION[direction]];
@@ -103,4 +111,9 @@ export function getPlacementHighlightPalette(
 /** 武器文案映射集中收口，避免个别武器缩写规则散落在渲染层。 */
 export function formatWeaponName(weaponType: WeaponType): string {
   return WEAPON_NAME_BY_TYPE[weaponType] ?? weaponType.toUpperCase();
+}
+
+/** 辅助实体短名集中收口，供 fallback、调试文本和后续 UI 提示复用。 */
+export function formatSupportName(supportType: SupportType): string {
+  return SUPPORT_NAME_BY_TYPE[supportType];
 }

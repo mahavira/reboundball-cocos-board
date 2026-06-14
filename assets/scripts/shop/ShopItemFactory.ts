@@ -1,8 +1,10 @@
 import {
   DIRECTIONS,
+  SUPPORT_TYPES,
   TURNER_VARIANTS,
   WEAPON_TYPES,
 } from '../shared/entity-definitions.ts';
+import { RANDOM_SHOP_ENTITY_KINDS } from '../shared/entity-registry.ts';
 import {
   getShopItemGoldPrice,
 } from './shop-gold-rules.ts';
@@ -11,6 +13,7 @@ import type {
   EntityState,
   GridCoord,
   ShopItemDefinition,
+  SupportShopItemDefinition,
   TurnerShopItemDefinition,
   WeaponShopItemDefinition,
 } from '../shared/types.ts';
@@ -34,6 +37,15 @@ export function createShopPlacementSpec(item: ShopItemDefinition, coord: GridCoo
       kind: 'turner',
       coord,
       variant: item.variant,
+      level: item.level,
+    };
+  }
+
+  if (item.kind === 'support') {
+    return {
+      kind: 'support',
+      coord,
+      supportType: item.supportType,
       level: item.level,
     };
   }
@@ -78,6 +90,13 @@ export function createPlacementSpecFromEntity(
         level: entity.level,
         charge: entity.charge,
       };
+    case 'support':
+      return {
+        kind: 'support',
+        coord,
+        supportType: entity.supportType,
+        level: entity.level,
+      };
     case 'slow-zone':
       return {
         kind: 'slow-zone',
@@ -118,9 +137,15 @@ function createRandomShopItem(index: number, randomFn: () => number): ShopItemDe
     return createTurnerItem(itemId, randomFn);
   }
 
-  return randomFn() < 0.5
-    ? createWeaponItem(itemId, randomFn)
-    : createTurnerItem(itemId, randomFn);
+  const kind = RANDOM_SHOP_ENTITY_KINDS[getRandomIndex(RANDOM_SHOP_ENTITY_KINDS.length, randomFn)];
+  switch (kind) {
+    case 'turner':
+      return createTurnerItem(itemId, randomFn);
+    case 'weapon':
+      return createWeaponItem(itemId, randomFn);
+    case 'support':
+      return createSupportItem(itemId, randomFn);
+  }
 }
 
 function createTurnerItem(itemId: string, randomFn: () => number): TurnerShopItemDefinition {
@@ -142,6 +167,18 @@ function createWeaponItem(itemId: string, randomFn: () => number): WeaponShopIte
     weaponType: WEAPON_TYPES[getRandomIndex(WEAPON_TYPES.length, randomFn)],
     facing: DIRECTIONS[getRandomIndex(DIRECTIONS.length, randomFn)],
     tailDirections: undefined,
+    level: 1,
+    price: 0,
+  };
+  item.price = getShopItemGoldPrice(item);
+  return item;
+}
+
+function createSupportItem(itemId: string, randomFn: () => number): SupportShopItemDefinition {
+  const item: SupportShopItemDefinition = {
+    itemId,
+    kind: 'support',
+    supportType: SUPPORT_TYPES[getRandomIndex(SUPPORT_TYPES.length, randomFn)],
     level: 1,
     price: 0,
   };

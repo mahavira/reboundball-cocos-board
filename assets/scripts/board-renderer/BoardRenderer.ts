@@ -12,6 +12,10 @@ import {
 } from './board-renderer-constants.ts';
 import { createChild, createColor, gridToPosition, setNodeSize } from './board-renderer-node-utils.ts';
 import { createDashedPredictionPolylines } from '../board-prediction/board-prediction-render-utils.ts';
+import {
+  collectActiveSupportAuraState,
+  type ActiveSupportAuraState,
+} from '../board-runtime/SupportAuraActivation.ts';
 import { buildPipePath } from '../board-runtime/board-runtime-rules.ts';
 import { getGridFillRgba, getPlacementHighlightPalette } from './board-renderer-style.ts';
 import { createShopPlacementSpec } from '../shop/ShopItemFactory.ts';
@@ -19,6 +23,7 @@ import { coordKey } from '../shared/helpers.ts';
 import type {
   BallRenderState,
   BoardDragItemDefinition,
+  Direction,
   EntitySpec,
   EntityState,
   GridCoord,
@@ -93,8 +98,9 @@ export class BoardRenderer {
     this.boardEntityLayerNode.destroyAllChildren();
     this.entityNodeMap.clear();
 
+    const activeSupportAuraState = collectActiveSupportAuraState(entities);
     for (const entity of entities) {
-      this.createPlacedEntityNode(entity);
+      this.createPlacedEntityNode(entity, getEntitySupportAuraLightDirection(entity, activeSupportAuraState));
     }
   }
 
@@ -111,7 +117,7 @@ export class BoardRenderer {
       return;
     }
 
-    this.createPlacedEntityNode(entity);
+    this.createPlacedEntityNode(entity, null);
   }
 
   /** 播放武器尾巴充能反馈；只命中本次经过的尾巴格，不连带同武器其他尾巴。 */
@@ -308,7 +314,7 @@ export class BoardRenderer {
     mountEntityVisual(targetNode, entity);
   }
 
-  private createPlacedEntityNode(entity: EntityState): void {
+  private createPlacedEntityNode(entity: EntityState, supportAuraLightDirection: Direction | null): void {
     const entityRootNode = createChild(
       this.boardEntityLayerNode,
       `Entity-${entity.coord.row}-${entity.coord.col}`,
@@ -321,6 +327,9 @@ export class BoardRenderer {
     setNodeSize(entityRootNode, CELL_SIZE, CELL_SIZE);
     entityRootNode.setPosition(this.getCachedGridPosition(entity.coord));
     mountEntityVisual(entityRootNode, entity);
+    if (supportAuraLightDirection) {
+      mountSupportAuraActiveLight(entityRootNode, supportAuraLightDirection);
+    }
     this.entityNodeMap.set(coordKey(entity.coord), entityRootNode);
   }
 
@@ -572,6 +581,48 @@ function toDragPreviewEntity(item: BoardDragItemDefinition): EntitySpec | Entity
   return 'itemId' in item
     ? createShopPlacementSpec(item, { row: 0, col: 0 })
     : item;
+}
+
+function getEntitySupportAuraLightDirection(
+  entity: EntityState,
+  auraState: ActiveSupportAuraState,
+): Direction | null {
+  const key = coordKey(entity.coord);
+  if (entity.kind === 'weapon') {
+    return auraState.activeWeaponDirectionByCoordKey.get(key) ?? null;
+  }
+  if (entity.kind === 'support') {
+    return auraState.activeSupportDirectionByCoordKey.get(key) ?? null;
+  }
+  return null;
+}
+
+function mountSupportAuraActiveLight(targetNode: Node, direction: Direction): void {
+  const lightNode = createChild(targetNode, 'SupportAuraActiveLightNode');
+  lightNode.setPosition(getSupportAuraLightPosition(direction));
+  setNodeSize(lightNode, 14, 14);
+
+  const graphics = lightNode.addComponent(Graphics);
+  graphics.fillColor = new Color(34, 197, 94, 255);
+  graphics.strokeColor = new Color(220, 252, 231, 255);
+  graphics.lineWidth = 2;
+  graphics.circle(0, 0, 6);
+  graphics.fill();
+  graphics.stroke();
+}
+
+function getSupportAuraLightPosition(direction: Direction): Vec3 {
+  const edgeOffset = CELL_SIZE / 2;
+  switch (direction) {
+    case 'up':
+      return new Vec3(0, edgeOffset, 0);
+    case 'right':
+      return new Vec3(edgeOffset, 0, 0);
+    case 'down':
+      return new Vec3(0, -edgeOffset, 0);
+    case 'left':
+      return new Vec3(-edgeOffset, 0, 0);
+  }
 }
 
 type PipeStepDirection = 'up' | 'down' | 'left' | 'right';
