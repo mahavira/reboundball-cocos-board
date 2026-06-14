@@ -34,6 +34,20 @@ export class BoardRuntimeEvents {
     });
   }
 
+  emitWeaponTailCharge(weaponCoord: GridCoord, tailCoord: GridCoord): void {
+    this.emitEntityChange({
+      kind: 'state-changed',
+      changedCoords: [cloneCoord(weaponCoord)],
+      requiresPredictionRefresh: false,
+      tailFeedbacks: [
+        {
+          weaponCoord: cloneCoord(weaponCoord),
+          tailCoord: cloneCoord(tailCoord),
+        },
+      ],
+    });
+  }
+
   emitEntityChange(event: BoardEntityChangeEvent): void {
     this.entityChangeListeners.forEach((listener) => listener(event));
   }

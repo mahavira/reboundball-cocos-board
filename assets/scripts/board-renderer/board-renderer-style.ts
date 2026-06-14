@@ -42,7 +42,7 @@ const TURNER_GLYPH_PATH_BY_VARIANT: Record<TurnerVariant, readonly Point2[]> = {
 
 const GRID_FILL_RGBA_BY_ZONE = {
   entry: [34, 197, 94, 210],
-  inner: [30, 41, 59, 210],
+  inner: [227, 230, 241, 210],
   pipe: [51, 65, 85, 180],
 } as const satisfies Record<'entry' | 'inner' | 'pipe', Rgba>;
 

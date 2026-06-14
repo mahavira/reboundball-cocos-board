@@ -25,7 +25,7 @@ export class WeaponChargeSystem {
 
     for (const entity of triggeredWeapons) {
       entity.charge += 1;
-      this.events.emitCoordChange('state-changed', entity.coord, false);
+      this.events.emitWeaponTailCharge(entity.coord, centerCell);
 
       if (entity.charge >= getWeaponChargeLimit(entity)) {
         entity.charge = 0;

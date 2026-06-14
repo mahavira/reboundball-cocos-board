@@ -4,11 +4,16 @@ import {
   HorizontalTextAlignment,
   Label,
   Node,
+  Rect,
+  resources,
+  Sprite,
+  SpriteFrame,
   Vec3,
   VerticalTextAlignment,
 } from 'cc';
 
 import {
+  CELL_SIZE,
   ENTITY_BODY_SIZE,
   ENTITY_CORNER_RADIUS,
   ENTITY_HALF_BODY,
@@ -16,17 +21,55 @@ import {
   LEVEL_COLORS,
   WEAPON_BODY_SIZE,
   WEAPON_HALF_BODY,
+  WEAPON_TAIL_GEAR_CENTER_OFFSET_Y,
+  WEAPON_TAIL_GEAR_IMAGE_SIZE,
+  WEAPON_TAIL_GEAR_RAW_SIZE,
+  WEAPON_TAIL_IMAGE_HEIGHT,
+  WEAPON_TAIL_IMAGE_WIDTH,
   WEAPON_TAIL_RADIUS,
-  WEAPON_TAIL_SIZE,
+  WEAPON_TAIL_SPRITE_FRAME_PATH,
 } from './board-renderer-constants.ts';
-import { directionToOffset, setNodeSize } from './board-renderer-node-utils.ts';
-import { formatWeaponName, getTurnerGlyphPath } from './board-renderer-style.ts';
+import { setNodeSize } from './board-renderer-node-utils.ts';
+import { getTurnerGlyphPath } from './board-renderer-style.ts';
 import type {
+  Direction,
   EntitySpec,
   EntityState,
   TurnerVariant,
-  WeaponType,
 } from '../shared/types.ts';
+
+type EntityIconKey =
+  | 'black-hole'
+  | 'bomb'
+  | 'chaos-gate'
+  | 'ice-block'
+  | 'laser'
+  | 'lightning'
+  | 'pistol'
+  | 'rotator'
+  | 'slow-zone'
+  | 'stone'
+  | 'turner'
+  | 'wreckage';
+
+interface PendingEntityIconHost {
+  hostNode: Node;
+  entity: EntityState;
+}
+
+interface PendingWeaponTailHost {
+  hostNode: Node;
+  direction: Direction;
+}
+
+const entityIconSpriteFrameByKey = new Map<EntityIconKey, SpriteFrame>();
+const loadingEntityIconKeys = new Set<EntityIconKey>();
+const pendingEntityIconHosts = new Map<EntityIconKey, Set<PendingEntityIconHost>>();
+
+let weaponTailSpriteFrame: SpriteFrame | null = null;
+let weaponTailGearSpriteFrame: SpriteFrame | null = null;
+let isWeaponTailSpriteFrameLoadStarted = false;
+const pendingWeaponTailHosts = new Set<PendingWeaponTailHost>();
 
 /** 在指定容器中绘制完整实体视觉，可被棋盘本体、商店图标和拖拽预览复用。 */
 export function mountEntityVisual(targetNode: Node, entity: EntitySpec | EntityState): void {
@@ -35,8 +78,7 @@ export function mountEntityVisual(targetNode: Node, entity: EntitySpec | EntityS
   bodyNode.setParent(targetNode);
   setNodeSize(bodyNode, ENTITY_BODY_SIZE, ENTITY_BODY_SIZE);
 
-  const graphics = bodyNode.addComponent(Graphics);
-  drawEntity(graphics, renderableEntity);
+  mountEntityIconVisual(bodyNode, renderableEntity);
   mountEntityText(bodyNode, renderableEntity);
 
   if (renderableEntity.kind !== 'weapon') {
@@ -44,23 +86,257 @@ export function mountEntityVisual(targetNode: Node, entity: EntitySpec | EntityS
   }
 
   renderableEntity.tailDirections.forEach((direction, index) => {
-    const tailNode = new Node(`EntityTailNode-${index}`);
+    const tailCoord = getWeaponTailCoord(renderableEntity, direction);
+    const tailNode = new Node(`EntityTailNode-${tailCoord.row}-${tailCoord.col}-${index}`);
     tailNode.setParent(targetNode);
-    tailNode.setPosition(directionToOffset(direction));
-    setNodeSize(tailNode, WEAPON_TAIL_SIZE, WEAPON_TAIL_SIZE);
-
-    const tailGraphics = tailNode.addComponent(Graphics);
-    tailGraphics.fillColor = new Color(255, 214, 102, 220);
-    tailGraphics.circle(0, 0, WEAPON_TAIL_RADIUS);
-    tailGraphics.fill();
+    tailNode.setPosition(getWeaponTailPivotOffset(direction));
+    setNodeSize(tailNode, WEAPON_TAIL_IMAGE_WIDTH, WEAPON_TAIL_IMAGE_HEIGHT);
+    mountWeaponTailVisual(tailNode, direction);
   });
+}
+
+function getWeaponTailCoord(entity: Extract<EntityState, { kind: 'weapon' }>, direction: Direction) {
+  switch (direction) {
+    case 'up':
+      return { row: entity.coord.row - 1, col: entity.coord.col };
+    case 'down':
+      return { row: entity.coord.row + 1, col: entity.coord.col };
+    case 'left':
+      return { row: entity.coord.row, col: entity.coord.col - 1 };
+    case 'right':
+      return { row: entity.coord.row, col: entity.coord.col + 1 };
+  }
+}
+
+function mountEntityIconVisual(hostNode: Node, entity: EntityState): void {
+  const iconKey = getEntityIconKey(entity);
+  const spriteFrame = entityIconSpriteFrameByKey.get(iconKey);
+  if (spriteFrame) {
+    mountEntityIconSprite(hostNode, entity, spriteFrame);
+    return;
+  }
+
+  mountEntityIconFallback(hostNode, entity);
+  addPendingEntityIconHost(iconKey, hostNode, entity);
+  loadEntityIconSpriteFrame(iconKey);
+}
+
+function mountEntityIconSprite(hostNode: Node, entity: EntityState, spriteFrame: SpriteFrame): void {
+  hostNode.destroyAllChildren();
+  hostNode.getComponent(Graphics)?.clear();
+
+  const spriteNode = new Node('EntityIconSpriteNode');
+  spriteNode.setParent(hostNode);
+  spriteNode.setRotationFromEuler(0, 0, getEntityIconRotation(entity));
+  setNodeSize(spriteNode, ENTITY_BODY_SIZE, ENTITY_BODY_SIZE);
+
+  const sprite = spriteNode.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.spriteFrame = spriteFrame;
+}
+
+function mountEntityIconFallback(hostNode: Node, entity: EntityState): void {
+  const graphics = hostNode.addComponent(Graphics);
+  drawEntity(graphics, entity);
+}
+
+function addPendingEntityIconHost(iconKey: EntityIconKey, hostNode: Node, entity: EntityState): void {
+  const pendingHosts = pendingEntityIconHosts.get(iconKey) ?? new Set<PendingEntityIconHost>();
+  pendingHosts.add({
+    hostNode,
+    entity,
+  });
+  pendingEntityIconHosts.set(iconKey, pendingHosts);
+}
+
+function loadEntityIconSpriteFrame(iconKey: EntityIconKey): void {
+  if (entityIconSpriteFrameByKey.has(iconKey) || loadingEntityIconKeys.has(iconKey)) {
+    return;
+  }
+
+  loadingEntityIconKeys.add(iconKey);
+  const path = `images/entity/${iconKey}/spriteFrame`;
+  resources.load(path, SpriteFrame, (error, spriteFrame) => {
+    if (error) {
+      console.warn(`Failed to load ${path}`, error);
+      return;
+    }
+
+    entityIconSpriteFrameByKey.set(iconKey, spriteFrame);
+    flushPendingEntityIconHosts(iconKey, spriteFrame);
+  });
+}
+
+function flushPendingEntityIconHosts(iconKey: EntityIconKey, spriteFrame: SpriteFrame): void {
+  const pendingHosts = pendingEntityIconHosts.get(iconKey);
+  if (!pendingHosts) {
+    return;
+  }
+
+  for (const pendingHost of pendingHosts) {
+    if (pendingHost.hostNode.isValid) {
+      mountEntityIconSprite(pendingHost.hostNode, pendingHost.entity, spriteFrame);
+    }
+  }
+  pendingEntityIconHosts.delete(iconKey);
+}
+
+function mountWeaponTailVisual(hostNode: Node, direction: Direction): void {
+  if (weaponTailSpriteFrame) {
+    mountWeaponTailSprite(hostNode, direction);
+    return;
+  }
+
+  mountWeaponTailFallback(hostNode, direction);
+  pendingWeaponTailHosts.add({
+    hostNode,
+    direction,
+  });
+  loadWeaponTailSpriteFrame();
+}
+
+function loadWeaponTailSpriteFrame(): void {
+  if (weaponTailSpriteFrame || isWeaponTailSpriteFrameLoadStarted) {
+    return;
+  }
+
+  isWeaponTailSpriteFrameLoadStarted = true;
+  resources.load(WEAPON_TAIL_SPRITE_FRAME_PATH, SpriteFrame, (error, spriteFrame) => {
+    if (error) {
+      console.warn(`Failed to load ${WEAPON_TAIL_SPRITE_FRAME_PATH}`, error);
+      return;
+    }
+
+    weaponTailSpriteFrame = spriteFrame;
+    weaponTailGearSpriteFrame = createWeaponTailGearSpriteFrame(spriteFrame);
+    flushPendingWeaponTailHosts();
+  });
+}
+
+function flushPendingWeaponTailHosts(): void {
+  for (const pendingHost of pendingWeaponTailHosts) {
+    if (pendingHost.hostNode.isValid) {
+      mountWeaponTailSprite(pendingHost.hostNode, pendingHost.direction);
+    }
+  }
+  pendingWeaponTailHosts.clear();
+}
+
+function mountWeaponTailSprite(hostNode: Node, direction: Direction): void {
+  if (!weaponTailSpriteFrame) {
+    return;
+  }
+
+  hostNode.destroyAllChildren();
+  hostNode.getComponent(Graphics)?.clear();
+
+  const spriteNode = new Node('WeaponTailSpriteNode');
+  spriteNode.setParent(hostNode);
+  spriteNode.setPosition(getWeaponTailSpriteOffset(direction));
+  spriteNode.setRotationFromEuler(0, 0, getWeaponTailSpriteRotation(direction));
+  setNodeSize(spriteNode, WEAPON_TAIL_IMAGE_WIDTH, WEAPON_TAIL_IMAGE_HEIGHT);
+
+  const sprite = spriteNode.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.spriteFrame = weaponTailSpriteFrame;
+
+  mountWeaponTailGearSprite(hostNode, direction);
+}
+
+function mountWeaponTailGearSprite(hostNode: Node, direction: Direction): void {
+  if (!weaponTailGearSpriteFrame) {
+    return;
+  }
+
+  const gearNode = new Node('WeaponTailGearNode');
+  gearNode.setParent(hostNode);
+  gearNode.setPosition(getWeaponTailGearOffsetFromPivot(direction));
+  setNodeSize(gearNode, WEAPON_TAIL_GEAR_IMAGE_SIZE, WEAPON_TAIL_GEAR_IMAGE_SIZE);
+
+  const gearSprite = gearNode.addComponent(Sprite);
+  gearSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  gearSprite.spriteFrame = weaponTailGearSpriteFrame;
+}
+
+function createWeaponTailGearSpriteFrame(sourceSpriteFrame: SpriteFrame): SpriteFrame {
+  const gearSpriteFrame = sourceSpriteFrame.clone();
+  gearSpriteFrame.rect = new Rect(0, 0, WEAPON_TAIL_GEAR_RAW_SIZE, WEAPON_TAIL_GEAR_RAW_SIZE);
+  return gearSpriteFrame;
+}
+
+function mountWeaponTailFallback(hostNode: Node, direction: Direction): void {
+  const tailGraphics = hostNode.addComponent(Graphics);
+  tailGraphics.fillColor = new Color(255, 214, 102, 220);
+  const gearOffset = getWeaponTailGearOffsetFromPivot(direction);
+  tailGraphics.circle(gearOffset.x, gearOffset.y, WEAPON_TAIL_RADIUS);
+  tailGraphics.fill();
+}
+
+function getWeaponTailGearCenterOffset(direction: Direction): Vec3 {
+  switch (direction) {
+    case 'up':
+      return new Vec3(0, CELL_SIZE, 0);
+    case 'down':
+      return new Vec3(0, -CELL_SIZE, 0);
+    case 'left':
+      return new Vec3(-CELL_SIZE, 0, 0);
+    case 'right':
+      return new Vec3(CELL_SIZE, 0, 0);
+  }
+}
+
+function getWeaponTailPivotOffset(direction: Direction): Vec3 {
+  const gearCenterOffset = getWeaponTailGearCenterOffset(direction);
+  const gearOffsetFromPivot = getWeaponTailGearOffsetFromPivot(direction);
+  return new Vec3(
+    gearCenterOffset.x - gearOffsetFromPivot.x,
+    gearCenterOffset.y - gearOffsetFromPivot.y,
+    0,
+  );
+}
+
+function getWeaponTailSpriteRotation(direction: Direction): number {
+  switch (direction) {
+    case 'up':
+      return 0;
+    case 'down':
+      return 180;
+    case 'left':
+      return 90;
+    case 'right':
+      return -90;
+  }
+}
+
+function getWeaponTailSpriteOffset(direction: Direction): Vec3 {
+  return rotateLocalUpOffset(direction, WEAPON_TAIL_IMAGE_HEIGHT / 2);
+}
+
+function getWeaponTailGearOffsetFromPivot(direction: Direction): Vec3 {
+  return rotateLocalUpOffset(
+    direction,
+    WEAPON_TAIL_GEAR_CENTER_OFFSET_Y + WEAPON_TAIL_IMAGE_HEIGHT / 2,
+  );
+}
+
+function rotateLocalUpOffset(direction: Direction, offsetY: number): Vec3 {
+  switch (direction) {
+    case 'up':
+      return new Vec3(0, offsetY, 0);
+    case 'down':
+      return new Vec3(0, -offsetY, 0);
+    case 'left':
+      return new Vec3(-offsetY, 0, 0);
+    case 'right':
+      return new Vec3(offsetY, 0, 0);
+  }
 }
 
 function drawEntity(graphics: Graphics, entity: EntityState): void {
   graphics.clear();
   graphics.lineWidth = 2;
 
-  if (entity.kind === 'turner' || entity.kind === 'rotator') {
+  if (entity.kind === 'rotator') {
     drawTurnerLikeEntity(graphics, entity);
     return;
   }
@@ -93,29 +369,9 @@ function drawEntity(graphics: Graphics, entity: EntityState): void {
 }
 
 function mountEntityText(targetNode: Node, entity: EntityState): void {
-  if (entity.kind === 'weapon') {
-    mountWeaponNameLabel(targetNode, entity.weaponType);
-    return;
-  }
-
   if (entity.kind === 'turner' || entity.kind === 'rotator') {
     mountLevelLabel(targetNode, entity.level);
   }
-}
-
-/** 武器直接显示名称，避免仅靠箭头图形表达，降低商店与棋盘中的识别成本。 */
-function mountWeaponNameLabel(targetNode: Node, weaponType: WeaponType): void {
-  const labelNode = new Node('WeaponNameLabelNode');
-  labelNode.setParent(targetNode);
-  setNodeSize(labelNode, WEAPON_BODY_SIZE - 8, 28);
-
-  const label = labelNode.addComponent(Label);
-  label.string = formatWeaponName(weaponType);
-  label.fontSize = 14;
-  label.lineHeight = 20;
-  label.horizontalAlign = HorizontalTextAlignment.CENTER;
-  label.verticalAlign = VerticalTextAlignment.CENTER;
-  label.color = new Color(15, 23, 42, 255);
 }
 
 function mountLevelLabel(targetNode: Node, level: number): void {
@@ -146,6 +402,34 @@ function drawDirectionGlyph(graphics: Graphics, variant: TurnerVariant): void {
     graphics.lineTo(x, y);
   });
   graphics.stroke();
+}
+
+function getEntityIconKey(entity: EntityState): EntityIconKey {
+  if (entity.kind === 'weapon') {
+    return entity.weaponType;
+  }
+  return entity.kind;
+}
+
+function getEntityIconRotation(entity: EntityState): number {
+  if (entity.kind === 'turner' || entity.kind === 'rotator') {
+    return getTurnerIconRotation(entity.variant);
+  }
+
+  return 0;
+}
+
+function getTurnerIconRotation(variant: TurnerVariant): number {
+  switch (variant) {
+    case 'left-up':
+      return 0;
+    case 'left-down':
+      return 90;
+    case 'right-down':
+      return 180;
+    case 'right-up':
+      return -90;
+  }
 }
 
 function toRenderableEntity(entity: EntitySpec | EntityState): EntityState {

@@ -2,12 +2,12 @@
   "ver": "1.1.50",
   "importer": "prefab",
   "imported": true,
-  "uuid": "184408c5-b7d7-49a8-8a40-abbcdda3e373",
+  "uuid": "8f35b9b0-4c80-4853-9802-1d8e145ff713",
   "files": [
     ".json"
   ],
   "subMetas": {},
   "userData": {
-    "syncNodeName": "EmptyNode"
+    "syncNodeName": "EntityTurner"
   }
 }

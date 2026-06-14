@@ -202,11 +202,18 @@ export type RuntimeState = {
 /** 棋盘实体变化类型；既包括显式布局改动，也包括 step 结算中的实体状态变化。 */
 export type BoardEntityChangeKind = 'placed' | 'removed' | 'rotated' | 'upgraded' | 'reset' | 'state-changed';
 
+/** 武器尾巴充能反馈定位：weaponCoord 刷新武器本体，tailCoord 只播放当前触发尾巴。 */
+export type WeaponTailFeedback = {
+  weaponCoord: GridCoord;
+  tailCoord: GridCoord;
+};
+
 /** BoardRuntime 对外发布的实体布局变更事件。 */
 export type BoardEntityChangeEvent = {
   kind: BoardEntityChangeKind;
   changedCoords: GridCoord[];
   requiresPredictionRefresh: boolean;
+  tailFeedbacks?: WeaponTailFeedback[];
 };
 
 /** 商店只售卖可拖拽放置到棋盘的 turner / weapon 商品。 */

@@ -3,6 +3,7 @@ import {
   createStepContext,
   shouldStartBallStep,
 } from './board-bootstrap-step-driver.ts';
+import { BALL_ROLL_DEGREES_PER_SECOND } from './board-animation-config.ts';
 import { cloneCoord } from '../shared/helpers.ts';
 import type { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import type { BoardRuntime } from '../board-runtime/BoardRuntime.ts';
@@ -16,6 +17,7 @@ import type {
 interface BallStepAnimatorOptions {
   runtime: BoardRuntime;
   renderer: BoardRenderer;
+  ballRollDegreesPerSecond?: number;
 }
 
 /**
@@ -26,6 +28,7 @@ interface BallStepAnimatorOptions {
 export class BallStepAnimator {
   private readonly runtime: BoardRuntime;
   private readonly renderer: BoardRenderer;
+  private readonly ballRollDegreesPerSecond: number;
   /** ballId → 当前正在推进的 step 上下文。 */
   private readonly activeBallSteps = new Map<string, BallStepContext>();
   private readonly activeBallIdsSnapshot = new Set<string>();
@@ -35,6 +38,7 @@ export class BallStepAnimator {
   constructor(options: BallStepAnimatorOptions) {
     this.runtime = options.runtime;
     this.renderer = options.renderer;
+    this.ballRollDegreesPerSecond = options.ballRollDegreesPerSecond ?? BALL_ROLL_DEGREES_PER_SECOND;
   }
 
   update(deltaMs: number): void {
@@ -131,12 +135,14 @@ export class BallStepAnimator {
     stepContext.elapsedMs += deltaMs;
     const clampedElapsedMs = Math.min(stepContext.elapsedMs, stepContext.totalDurationMs);
     const overflowMs = Math.max(stepContext.elapsedMs - stepContext.totalDurationMs, 0);
+    const consumedMs = Math.max(deltaMs - overflowMs, 0);
     const currentCoord = this.resolveAnimationCoord(stepContext.step, clampedElapsedMs);
 
     if (!this.renderer.setBallPosition(ballId, currentCoord)) {
       this.activeBallSteps.delete(ballId);
       return 0;
     }
+    this.renderer.rotateBall(ballId, this.toRotationDeltaDegrees(consumedMs));
 
     this.emitReachedProgressEvents(stepContext, clampedElapsedMs);
 
@@ -179,5 +185,9 @@ export class BallStepAnimator {
       };
     }
     return cloneCoord(step.finalCell);
+  }
+
+  private toRotationDeltaDegrees(deltaMs: number): number {
+    return (deltaMs / 1000) * this.ballRollDegreesPerSecond;
   }
 }

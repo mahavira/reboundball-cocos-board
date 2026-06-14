@@ -1,8 +1,9 @@
-import { Color, Graphics, Node, UITransform, Vec3 } from 'cc';
+import { Color, Graphics, instantiate, Node, Prefab, resources, Sprite, SpriteFrame, tween, Tween, UITransform, Vec3 } from 'cc';
 
 import { mountEntityVisual } from './BoardEntityVisual.ts';
 import {
   BALL_RADIUS,
+  BALL_SPRITE_FRAME_PATH,
   BOARD_CELLS,
   BOARD_SIZE_PX,
   CELL_SIZE,
@@ -11,6 +12,7 @@ import {
 } from './board-renderer-constants.ts';
 import { createChild, createColor, gridToPosition, setNodeSize } from './board-renderer-node-utils.ts';
 import { createDashedPredictionPolylines } from '../board-prediction/board-prediction-render-utils.ts';
+import { buildPipePath } from '../board-runtime/board-runtime-rules.ts';
 import { getGridFillRgba, getPlacementHighlightPalette } from './board-renderer-style.ts';
 import { createShopPlacementSpec } from '../shop/ShopItemFactory.ts';
 import { coordKey } from '../shared/helpers.ts';
@@ -29,11 +31,15 @@ const BOARD_LAYER_NAME = 'BoardLayerNode';
 
 const RENDER_LAYERS = {
   grid: 'BoardGridLayer',
+  pipe: 'BoardPipeLayer',
   entity: 'BoardEntityLayer',
   prediction: 'BoardPredictionLayer',
   dragHighlight: 'BoardDragHighlightLayer',
   ball: 'BoardBallLayer',
 } as const;
+
+const PIPE_NODE_PREFAB_PATH = 'prefabs/PipeNode';
+const PIPE_BEND_PREFAB_PATH = 'prefabs/PipeBend';
 
 /**
  * 棋盘渲染器。
@@ -53,10 +59,16 @@ export class BoardRenderer {
   private readonly rootNode: Node;
   private boardLayerNode!: Node;
   private boardGridLayerNode!: Node;
+  private boardPipeLayerNode!: Node;
   private boardEntityLayerNode!: Node;
   private boardPredictionLayerNode!: Node;
   private boardBallLayerNode!: Node;
   private boardDragHighlightLayerNode!: Node;
+  private pipeNodePrefab: Prefab | null = null;
+  private pipeBendPrefab: Prefab | null = null;
+  private ballSpriteFrame: SpriteFrame | null = null;
+  private isPipePrefabLoadStarted = false;
+  private isBallSpriteLoadStarted = false;
   private dragHighlightNode: Node | null = null;
   private predictionPathNode: Node | null = null;
   private predictionPathGraphics: Graphics | null = null;
@@ -102,6 +114,43 @@ export class BoardRenderer {
     this.createPlacedEntityNode(entity);
   }
 
+  /** 播放武器尾巴充能反馈；只命中本次经过的尾巴格，不连带同武器其他尾巴。 */
+  playWeaponTailChargeFeedback(weaponCoord: GridCoord, tailCoord: GridCoord): void {
+    const entityNode = this.entityNodeMap.get(coordKey(weaponCoord));
+    if (!entityNode) {
+      return;
+    }
+
+    const tailNodeNamePrefix = `EntityTailNode-${tailCoord.row}-${tailCoord.col}-`;
+    for (const tailNode of entityNode.children.filter((child) => child.name.startsWith(tailNodeNamePrefix))) {
+      Tween.stopAllByTarget(tailNode);
+      tailNode.setRotationFromEuler(0, 0, 0);
+      tween(tailNode)
+        .to(0.05, { eulerAngles: new Vec3(0, 0, 7) })
+        .to(0.08, { eulerAngles: new Vec3(0, 0, -6) })
+        .to(0.06, { eulerAngles: new Vec3(0, 0, 3) })
+        .to(0.05, { eulerAngles: new Vec3(0, 0, 0) })
+        .start();
+      this.playWeaponTailGearChargeFeedback(tailNode);
+    }
+  }
+
+  private playWeaponTailGearChargeFeedback(tailNode: Node): void {
+    const gearNode = tailNode.getChildByName('WeaponTailGearNode');
+    if (!gearNode) {
+      return;
+    }
+
+    Tween.stopAllByTarget(gearNode);
+    gearNode.setRotationFromEuler(0, 0, 0);
+    tween(gearNode)
+      .by(0.07, { eulerAngles: new Vec3(0, 0, -180) })
+      .by(0.12, { eulerAngles: new Vec3(0, 0, -130) })
+      .by(0.18, { eulerAngles: new Vec3(0, 0, -70) })
+      .by(0.22, { eulerAngles: new Vec3(0, 0, -30) })
+      .start();
+  }
+
   /** 同步弹球节点集合：删除多余节点，并为新弹球补建渲染节点。 */
   syncBallNodes(ballStates: BallRenderState[]): void {
     this.removeStaleBallNodes(ballStates);
@@ -125,6 +174,18 @@ export class BoardRenderer {
       return false;
     }
     ballNode.setPosition(this.resolveGridPosition(coord));
+    return true;
+  }
+
+  /** 按视觉角速度累加弹球自转，只服务滑行动画表现。 */
+  rotateBall(ballId: string, rotationDeltaDegrees: number): boolean {
+    const ballNode = this.ballNodeMap.get(ballId);
+    if (!ballNode) {
+      return false;
+    }
+
+    const currentEuler = ballNode.eulerAngles;
+    ballNode.setRotationFromEuler(currentEuler.x, currentEuler.y, currentEuler.z + rotationDeltaDegrees);
     return true;
   }
 
@@ -292,11 +353,10 @@ export class BoardRenderer {
   private createBallNode(ball: BallRenderState): Node {
     const ballNode = createChild(this.boardBallLayerNode, `Ball-${ball.ballId}`);
     setNodeSize(ballNode, BALL_RADIUS * 2, BALL_RADIUS * 2);
-
-    const graphics = ballNode.addComponent(Graphics);
-    graphics.fillColor = ball.isFast ? new Color(248, 113, 113, 255) : new Color(250, 250, 250, 250);
-    graphics.circle(0, 0, BALL_RADIUS);
-    graphics.fill();
+    const sprite = ballNode.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.applyBallSpriteFrame(sprite);
+    this.loadBallSpriteFrame();
     return ballNode;
   }
 
@@ -309,6 +369,7 @@ export class BoardRenderer {
 
   private ensureRenderLayers(): void {
     this.boardGridLayerNode = this.ensureLayer(RENDER_LAYERS.grid);
+    this.boardPipeLayerNode = this.ensureLayer(RENDER_LAYERS.pipe);
     this.boardEntityLayerNode = this.ensureLayer(RENDER_LAYERS.entity);
     this.boardPredictionLayerNode = this.ensureLayer(RENDER_LAYERS.prediction);
     this.boardDragHighlightLayerNode = this.ensureLayer(RENDER_LAYERS.dragHighlight);
@@ -323,15 +384,15 @@ export class BoardRenderer {
   }
 
   private renderStaticGrid(): void {
-    if (this.boardGridLayerNode.children.length > 0) {
-      return;
-    }
-
-    for (let row = 0; row < BOARD_CELLS; row += 1) {
-      for (let col = 0; col < BOARD_CELLS; col += 1) {
-        this.createGridCell({ row, col });
+    if (this.boardGridLayerNode.children.length === 0) {
+      for (let row = 0; row < BOARD_CELLS; row += 1) {
+        for (let col = 0; col < BOARD_CELLS; col += 1) {
+          this.createGridCell({ row, col });
+        }
       }
     }
+
+    this.loadAndRenderPipePrefabs();
   }
 
   private createGridCell(coord: GridCoord): void {
@@ -346,6 +407,89 @@ export class BoardRenderer {
     graphics.roundRect(-(CELL_SIZE - 2) / 2, -(CELL_SIZE - 2) / 2, CELL_SIZE - 2, CELL_SIZE - 2, 10);
     graphics.fill();
     graphics.stroke();
+  }
+
+  private loadAndRenderPipePrefabs(): void {
+    if (this.isPipePrefabLoadStarted) {
+      return;
+    }
+
+    this.isPipePrefabLoadStarted = true;
+    resources.load(PIPE_NODE_PREFAB_PATH, Prefab, (nodeError, pipeNodePrefab) => {
+      if (nodeError) {
+        console.warn(`Failed to load ${PIPE_NODE_PREFAB_PATH}`, nodeError);
+        return;
+      }
+
+      this.pipeNodePrefab = pipeNodePrefab;
+      this.tryRenderPipePrefabLayer();
+    });
+
+    resources.load(PIPE_BEND_PREFAB_PATH, Prefab, (bendError, pipeBendPrefab) => {
+      if (bendError) {
+        console.warn(`Failed to load ${PIPE_BEND_PREFAB_PATH}`, bendError);
+        return;
+      }
+
+      this.pipeBendPrefab = pipeBendPrefab;
+      this.tryRenderPipePrefabLayer();
+    });
+  }
+
+  private loadBallSpriteFrame(): void {
+    if (this.ballSpriteFrame || this.isBallSpriteLoadStarted) {
+      return;
+    }
+
+    this.isBallSpriteLoadStarted = true;
+    resources.load(BALL_SPRITE_FRAME_PATH, SpriteFrame, (error, spriteFrame) => {
+      if (error) {
+        console.warn(`Failed to load ${BALL_SPRITE_FRAME_PATH}`, error);
+        return;
+      }
+
+      this.ballSpriteFrame = spriteFrame;
+      this.applyBallSpriteFrameToExistingBalls();
+    });
+  }
+
+  private applyBallSpriteFrameToExistingBalls(): void {
+    for (const ballNode of this.ballNodeMap.values()) {
+      const sprite = ballNode.getComponent(Sprite);
+      if (sprite) {
+        this.applyBallSpriteFrame(sprite);
+      }
+    }
+  }
+
+  private applyBallSpriteFrame(sprite: Sprite): void {
+    if (!this.ballSpriteFrame) {
+      return;
+    }
+
+    sprite.spriteFrame = this.ballSpriteFrame;
+  }
+
+  private tryRenderPipePrefabLayer(): void {
+    if (!this.pipeNodePrefab || !this.pipeBendPrefab) {
+      return;
+    }
+
+    this.boardPipeLayerNode.destroyAllChildren();
+
+    const pipePath = buildPipePath();
+    for (let index = 0; index < pipePath.length; index += 1) {
+      const coord = pipePath[index];
+      const previousCoord = pipePath[(index - 1 + pipePath.length) % pipePath.length];
+      const nextCoord = pipePath[(index + 1) % pipePath.length];
+      const segment = resolvePipePrefabSegment(previousCoord, coord, nextCoord);
+      const pipeNode = instantiate(segment.isBend ? this.pipeBendPrefab : this.pipeNodePrefab);
+
+      pipeNode.name = `Pipe-${coord.row}-${coord.col}`;
+      pipeNode.setParent(this.boardPipeLayerNode);
+      pipeNode.setPosition(this.getCachedGridPosition(coord));
+      pipeNode.setRotationFromEuler(0, 0, segment.rotationZ);
+    }
   }
 
   private ensurePredictionPathGraphics(): Graphics {
@@ -428,4 +572,77 @@ function toDragPreviewEntity(item: BoardDragItemDefinition): EntitySpec | Entity
   return 'itemId' in item
     ? createShopPlacementSpec(item, { row: 0, col: 0 })
     : item;
+}
+
+type PipeStepDirection = 'up' | 'down' | 'left' | 'right';
+
+interface PipePrefabSegment {
+  isBend: boolean;
+  rotationZ: number;
+}
+
+function resolvePipePrefabSegment(previousCoord: GridCoord, coord: GridCoord, nextCoord: GridCoord): PipePrefabSegment {
+  const incomingDirection = resolveStepDirection(coord, previousCoord);
+  const outgoingDirection = resolveStepDirection(coord, nextCoord);
+
+  if (isOppositePipeDirection(incomingDirection, outgoingDirection)) {
+    let rotationZ = 0;
+    if (incomingDirection === 'up') rotationZ = 90;
+    if (incomingDirection === 'down') rotationZ = -90;
+    if (incomingDirection === 'left') rotationZ = 180;
+    return {
+      isBend: false,
+      rotationZ,
+    };
+  }
+
+  return {
+    isBend: true,
+    rotationZ: resolvePipeBendRotation(incomingDirection, outgoingDirection),
+  };
+}
+
+function resolveStepDirection(fromCoord: GridCoord, toCoord: GridCoord): PipeStepDirection {
+  if (toCoord.row < fromCoord.row) {
+    return 'up';
+  }
+  if (toCoord.row > fromCoord.row) {
+    return 'down';
+  }
+  if (toCoord.col < fromCoord.col) {
+    return 'left';
+  }
+  return 'right';
+}
+
+function isOppositePipeDirection(firstDirection: PipeStepDirection, secondDirection: PipeStepDirection): boolean {
+  return (
+    (firstDirection === 'up' && secondDirection === 'down')
+    || (firstDirection === 'down' && secondDirection === 'up')
+    || (firstDirection === 'left' && secondDirection === 'right')
+    || (firstDirection === 'right' && secondDirection === 'left')
+  );
+}
+
+function resolvePipeBendRotation(
+  incomingDirection: PipeStepDirection,
+  outgoingDirection: PipeStepDirection,
+): number {
+  const directionPairKey = `${incomingDirection}-${outgoingDirection}`;
+  switch (directionPairKey) {
+    case 'right-down':
+    case 'down-right':
+      return 0;
+    case 'down-left':
+    case 'left-down':
+      return -90;
+    case 'left-up':
+    case 'up-left':
+      return 180;
+    case 'up-right':
+    case 'right-up':
+      return 90;
+    default:
+      return 0;
+  }
 }

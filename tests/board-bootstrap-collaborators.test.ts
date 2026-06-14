@@ -118,6 +118,7 @@ function createAnimatorRendererStub() {
   const rendererState = {
     syncBallNodesCalls: [] as BallRenderState[][],
     setBallPositionCalls: [] as Array<{ ballId: string; coord: GridCoord }>,
+    rotateBallCalls: [] as Array<{ ballId: string; rotationDeltaDegrees: number }>,
   };
 
   return {
@@ -129,6 +130,13 @@ function createAnimatorRendererStub() {
         rendererState.setBallPositionCalls.push({
           ballId,
           coord: structuredClone(coord),
+        });
+        return true;
+      },
+      rotateBall: (ballId: string, rotationDeltaDegrees: number) => {
+        rendererState.rotateBallCalls.push({
+          ballId,
+          rotationDeltaDegrees,
         });
         return true;
       },
@@ -174,6 +182,7 @@ function createRefresherRendererStub() {
     renderPredictionPathCalls: [] as Array<{ isEmpty: boolean; segmentsLength: number }>,
     syncBallNodesCalls: [] as BallRenderState[][],
     syncIdleBallNodesCalls: [] as Array<{ ballStates: BallRenderState[]; activeBallIds: string[] }>,
+    playWeaponTailChargeFeedbackCalls: [] as Array<{ weaponCoord: GridCoord; tailCoord: GridCoord }>,
   };
 
   return {
@@ -202,6 +211,12 @@ function createRefresherRendererStub() {
           activeBallIds: Array.from(activeBallIds),
         });
       },
+      playWeaponTailChargeFeedback: (weaponCoord: GridCoord, tailCoord: GridCoord) => {
+        rendererState.playWeaponTailChargeFeedbackCalls.push({
+          weaponCoord: structuredClone(weaponCoord),
+          tailCoord: structuredClone(tailCoord),
+        });
+      },
     },
     rendererState,
   };
@@ -227,6 +242,10 @@ test('BallStepAnimator syncs ball nodes, starts a step, emits progress, and clea
   assert.deepEqual(rendererState.setBallPositionCalls[0], {
     ballId: 'ball-1',
     coord: { row: 3, col: 0 },
+  });
+  assert.deepEqual(rendererState.rotateBallCalls[0], {
+    ballId: 'ball-1',
+    rotationDeltaDegrees: 0,
   });
 
   animator.update(400);
@@ -266,6 +285,31 @@ test('BallStepAnimator advances a newly started step in the same frame', () => {
       coord: { row: 3, col: 0.125 },
     },
   ]);
+  assert.deepEqual(rendererState.rotateBallCalls, [
+    {
+      ballId: 'ball-1',
+      rotationDeltaDegrees: 54,
+    },
+  ]);
+});
+
+test('BallStepAnimator uses configurable ball roll speed while moving', () => {
+  const { runtime } = createAnimatorRuntimeStub();
+  const { renderer, rendererState } = createAnimatorRendererStub();
+  const animator = new BallStepAnimator({
+    runtime: runtime as never,
+    renderer: renderer as never,
+    ballRollDegreesPerSecond: 180,
+  });
+
+  animator.update(100);
+
+  assert.deepEqual(rendererState.rotateBallCalls, [
+    {
+      ballId: 'ball-1',
+      rotationDeltaDegrees: 18,
+    },
+  ]);
 });
 
 test('BallStepAnimator carries overflow delta into the next step instead of dropping it', () => {
@@ -292,6 +336,16 @@ test('BallStepAnimator carries overflow delta into the next step instead of drop
     {
       ballId: 'ball-1',
       coord: { row: 3, col: 1.125 },
+    },
+  ]);
+  assert.deepEqual(rendererState.rotateBallCalls, [
+    {
+      ballId: 'ball-1',
+      rotationDeltaDegrees: 432,
+    },
+    {
+      ballId: 'ball-1',
+      rotationDeltaDegrees: 54,
     },
   ]);
 });
@@ -329,11 +383,64 @@ test('BoardPresentationRefresher batches entity and prediction refreshes until f
     },
   ]);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
+  assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, []);
 
   refresher.flushPendingPresentationRefreshes();
   assert.equal(rendererState.rebuildEntityLayerCalls.length, 0);
   assert.equal(rendererState.updateEntityNodeCalls.length, 1);
   assert.equal(rendererState.renderPredictionPathCalls.length, 1);
+});
+
+test('BoardPresentationRefresher plays only the charged weapon tail feedback after state changes refresh', () => {
+  const { runtime } = createRefresherRuntimeStub();
+  const { renderer, rendererState } = createRefresherRendererStub();
+  const refresher = new BoardPresentationRefresher({
+    runtime: runtime as never,
+    renderer: renderer as never,
+    getActiveBallIds: () => new Set(),
+  });
+
+  refresher.handleEntityChange({
+    kind: 'state-changed',
+    changedCoords: [{ row: 3, col: 1 }],
+    requiresPredictionRefresh: false,
+    tailFeedbacks: [
+      {
+        weaponCoord: { row: 3, col: 1 },
+        tailCoord: { row: 3, col: 2 },
+      },
+    ],
+  });
+  refresher.flushPendingPresentationRefreshes();
+
+  assert.deepEqual(rendererState.updateEntityNodeCalls.map((call) => call.coord), [
+    { row: 3, col: 1 },
+  ]);
+  assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, [
+    {
+      weaponCoord: { row: 3, col: 1 },
+      tailCoord: { row: 3, col: 2 },
+    },
+  ]);
+});
+
+test('BoardPresentationRefresher does not play tail feedback for generic state changes', () => {
+  const { runtime } = createRefresherRuntimeStub();
+  const { renderer, rendererState } = createRefresherRendererStub();
+  const refresher = new BoardPresentationRefresher({
+    runtime: runtime as never,
+    renderer: renderer as never,
+    getActiveBallIds: () => new Set(),
+  });
+
+  refresher.handleEntityChange({
+    kind: 'state-changed',
+    changedCoords: [{ row: 3, col: 1 }],
+    requiresPredictionRefresh: false,
+  });
+  refresher.flushPendingPresentationRefreshes();
+
+  assert.deepEqual(rendererState.playWeaponTailChargeFeedbackCalls, []);
 });
 
 test('BoardPresentationRefresher refreshBoardPresentation rebuilds layout and refreshIdleBallPresentation only syncs balls', () => {

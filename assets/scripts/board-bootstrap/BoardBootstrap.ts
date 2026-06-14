@@ -1,6 +1,7 @@
 import { _decorator, Component } from 'cc';
 
 import { BallStepAnimator } from './BallStepAnimator.ts';
+import { BALL_ROLL_DEGREES_PER_SECOND } from './board-animation-config.ts';
 import { BoardDragBridge } from './BoardDragBridge.ts';
 import { BoardPresentationRefresher } from './BoardPresentationRefresher.ts';
 import { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
@@ -40,6 +41,7 @@ export class BoardBootstrap extends Component {
     this.ballStepAnimator = new BallStepAnimator({
       runtime: this.runtime,
       renderer: this.renderer,
+      ballRollDegreesPerSecond: BALL_ROLL_DEGREES_PER_SECOND,
     });
 
     this.presentationRefresher = new BoardPresentationRefresher({

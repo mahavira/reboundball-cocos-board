@@ -2,7 +2,7 @@ import { BoardPathPredictor } from '../board-prediction/BoardPathPredictor.ts';
 import { coordKey } from '../shared/helpers.ts';
 import type { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import type { BoardRuntime } from '../board-runtime/BoardRuntime.ts';
-import type { BoardEntityChangeEvent, GridCoord } from '../shared/types.ts';
+import type { BoardEntityChangeEvent, GridCoord, WeaponTailFeedback } from '../shared/types.ts';
 
 interface BoardPresentationRefresherOptions {
   runtime: BoardRuntime;
@@ -14,6 +14,7 @@ interface PendingPresentationRefresh {
   needsFullEntityRefresh: boolean;
   needsPredictionRefresh: boolean;
   changedCoordsByKey: Map<string, GridCoord>;
+  tailFeedbacksByKey: Map<string, WeaponTailFeedback>;
 }
 
 /**
@@ -30,6 +31,7 @@ export class BoardPresentationRefresher {
     needsFullEntityRefresh: false,
     needsPredictionRefresh: false,
     changedCoordsByKey: new Map(),
+    tailFeedbacksByKey: new Map(),
   };
   private predictionPathPredictor!: BoardPathPredictor;
 
@@ -45,6 +47,10 @@ export class BoardPresentationRefresher {
       this.pendingRefresh.changedCoordsByKey.clear();
     } else {
       this.collectChangedCoords(event.changedCoords);
+    }
+
+    if (event.tailFeedbacks) {
+      this.collectTailFeedbacks(event.tailFeedbacks);
     }
 
     if (event.requiresPredictionRefresh) {
@@ -64,9 +70,12 @@ export class BoardPresentationRefresher {
       this.refreshPredictionPresentation();
     }
 
+    this.playPendingTailFeedback();
+
     this.pendingRefresh.needsFullEntityRefresh = false;
     this.pendingRefresh.needsPredictionRefresh = false;
     this.pendingRefresh.changedCoordsByKey.clear();
+    this.pendingRefresh.tailFeedbacksByKey.clear();
   }
 
   /**
@@ -92,6 +101,13 @@ export class BoardPresentationRefresher {
     }
   }
 
+  private collectTailFeedbacks(feedbacks: WeaponTailFeedback[]): void {
+    for (const feedback of feedbacks) {
+      const key = `${coordKey(feedback.weaponCoord)}:${coordKey(feedback.tailCoord)}`;
+      this.pendingRefresh.tailFeedbacksByKey.set(key, feedback);
+    }
+  }
+
   /** 用最新运行时实体快照重建实体层。 */
   private refreshEntityPresentation(): void {
     this.renderer.rebuildEntityLayer(this.runtime.getEntities());
@@ -101,6 +117,12 @@ export class BoardPresentationRefresher {
   private refreshChangedEntityPresentation(): void {
     for (const coord of this.pendingRefresh.changedCoordsByKey.values()) {
       this.renderer.updateEntityNode(coord, this.runtime.getEntityAt(coord));
+    }
+  }
+
+  private playPendingTailFeedback(): void {
+    for (const feedback of this.pendingRefresh.tailFeedbacksByKey.values()) {
+      this.renderer.playWeaponTailChargeFeedback(feedback.weaponCoord, feedback.tailCoord);
     }
   }
 
