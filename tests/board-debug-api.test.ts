@@ -6,7 +6,7 @@ import {
   formatBoardDebugStatus,
   type BoardDebugHost,
 } from '../assets/scripts/board-debug/board-debug-api.ts';
-import { createBoardPreset } from '../assets/scripts/BoardRuntime.ts';
+import { createBoardPreset } from '../assets/scripts/board-runtime/BoardRuntime.ts';
 
 function createHostSpy(): BoardDebugHost & {
   calls: string[];

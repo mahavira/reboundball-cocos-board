@@ -13,7 +13,6 @@ import {
 } from 'cc';
 
 import {
-  CELL_SIZE,
   ENTITY_BODY_SIZE,
   ENTITY_CORNER_RADIUS,
   ENTITY_HALF_BODY,
@@ -28,9 +27,9 @@ import {
   WEAPON_TAIL_IMAGE_WIDTH,
   WEAPON_TAIL_RADIUS,
   WEAPON_TAIL_SPRITE_FRAME_PATH,
-} from './board-renderer-constants.ts';
-import { setNodeSize } from './board-renderer-node-utils.ts';
-import { formatSupportName, getTurnerGlyphPath } from './board-renderer-style.ts';
+} from './entity-visual-constants.ts';
+import { setEntityVisualNodeSize } from './entity-visual-node-utils.ts';
+import { formatSupportName, getTurnerGlyphPath } from './entity-visual-style.ts';
 import type {
   Direction,
   EntitySpec,
@@ -80,7 +79,7 @@ export function mountEntityVisual(targetNode: Node, entity: EntitySpec | EntityS
   const renderableEntity = toRenderableEntity(entity);
   const bodyNode = new Node('EntityBodyNode');
   bodyNode.setParent(targetNode);
-  setNodeSize(bodyNode, ENTITY_BODY_SIZE, ENTITY_BODY_SIZE);
+  setEntityVisualNodeSize(bodyNode, ENTITY_BODY_SIZE, ENTITY_BODY_SIZE);
 
   mountEntityIconVisual(bodyNode, renderableEntity);
   mountEntityText(bodyNode, renderableEntity);
@@ -94,7 +93,7 @@ export function mountEntityVisual(targetNode: Node, entity: EntitySpec | EntityS
     const tailNode = new Node(`EntityTailNode-${tailCoord.row}-${tailCoord.col}-${index}`);
     tailNode.setParent(targetNode);
     tailNode.setPosition(getWeaponTailPivotOffset(direction));
-    setNodeSize(tailNode, WEAPON_TAIL_IMAGE_WIDTH, WEAPON_TAIL_IMAGE_HEIGHT);
+    setEntityVisualNodeSize(tailNode, WEAPON_TAIL_IMAGE_WIDTH, WEAPON_TAIL_IMAGE_HEIGHT);
     mountWeaponTailVisual(tailNode, direction);
   });
 }
@@ -132,7 +131,7 @@ function mountEntityIconSprite(hostNode: Node, entity: EntityState, spriteFrame:
   const spriteNode = new Node('EntityIconSpriteNode');
   spriteNode.setParent(hostNode);
   spriteNode.setRotationFromEuler(0, 0, getEntityIconRotation(entity));
-  setNodeSize(spriteNode, ENTITY_BODY_SIZE, ENTITY_BODY_SIZE);
+  setEntityVisualNodeSize(spriteNode, ENTITY_BODY_SIZE, ENTITY_BODY_SIZE);
 
   const sprite = spriteNode.addComponent(Sprite);
   sprite.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -267,7 +266,7 @@ function mountWeaponTailSprite(hostNode: Node, direction: Direction): void {
   spriteNode.setParent(hostNode);
   spriteNode.setPosition(getWeaponTailSpriteOffset(direction));
   spriteNode.setRotationFromEuler(0, 0, getWeaponTailSpriteRotation(direction));
-  setNodeSize(spriteNode, WEAPON_TAIL_IMAGE_WIDTH, WEAPON_TAIL_IMAGE_HEIGHT);
+  setEntityVisualNodeSize(spriteNode, WEAPON_TAIL_IMAGE_WIDTH, WEAPON_TAIL_IMAGE_HEIGHT);
 
   const sprite = spriteNode.addComponent(Sprite);
   sprite.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -284,7 +283,7 @@ function mountWeaponTailGearSprite(hostNode: Node, direction: Direction): void {
   const gearNode = new Node('WeaponTailGearNode');
   gearNode.setParent(hostNode);
   gearNode.setPosition(getWeaponTailGearOffsetFromPivot(direction));
-  setNodeSize(gearNode, WEAPON_TAIL_GEAR_IMAGE_SIZE, WEAPON_TAIL_GEAR_IMAGE_SIZE);
+  setEntityVisualNodeSize(gearNode, WEAPON_TAIL_GEAR_IMAGE_SIZE, WEAPON_TAIL_GEAR_IMAGE_SIZE);
 
   const gearSprite = gearNode.addComponent(Sprite);
   gearSprite.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -308,13 +307,13 @@ function mountWeaponTailFallback(hostNode: Node, direction: Direction): void {
 function getWeaponTailGearCenterOffset(direction: Direction): Vec3 {
   switch (direction) {
     case 'up':
-      return new Vec3(0, CELL_SIZE, 0);
+      return new Vec3(0, ENTITY_BODY_SIZE, 0);
     case 'down':
-      return new Vec3(0, -CELL_SIZE, 0);
+      return new Vec3(0, -ENTITY_BODY_SIZE, 0);
     case 'left':
-      return new Vec3(-CELL_SIZE, 0, 0);
+      return new Vec3(-ENTITY_BODY_SIZE, 0, 0);
     case 'right':
-      return new Vec3(CELL_SIZE, 0, 0);
+      return new Vec3(ENTITY_BODY_SIZE, 0, 0);
   }
 }
 
@@ -420,7 +419,7 @@ function mountSupportLabel(targetNode: Node, entity: Extract<EntityState, { kind
   const labelNode = new Node('EntitySupportLabelNode');
   labelNode.setParent(targetNode);
   labelNode.setPosition(new Vec3(0, 0, 0));
-  setNodeSize(labelNode, 50, 18);
+  setEntityVisualNodeSize(labelNode, 50, 18);
 
   const label = labelNode.addComponent(Label);
   label.string = formatSupportName(entity.supportType);
@@ -437,7 +436,7 @@ function mountLevelLabel(targetNode: Node, level: number): void {
   const labelNode = new Node('EntityLevelLabelNode');
   labelNode.setParent(targetNode);
   labelNode.setPosition(new Vec3(0, -24, 0));
-  setNodeSize(labelNode, 40, 18);
+  setEntityVisualNodeSize(labelNode, 40, 18);
 
   const label = labelNode.addComponent(Label);
   label.string = `Lv${level}`;

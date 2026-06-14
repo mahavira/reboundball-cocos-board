@@ -2,13 +2,14 @@ import type {
   BoardPlacementPreview,
   Direction,
   GridCoord,
-  SupportType,
-  TurnerVariant,
-  WeaponType,
 } from '../shared/types.ts';
+export {
+  formatSupportName,
+  formatWeaponName,
+  getTurnerGlyphPath,
+} from '../entity-visual/entity-visual-style.ts';
 
 type Rgba = readonly [number, number, number, number];
-type Point2 = readonly [number, number];
 type Vec3Components = readonly [number, number, number];
 
 const DIRECTION_OFFSET_BY_DIRECTION: Record<Direction, Vec3Components> = {
@@ -16,29 +17,6 @@ const DIRECTION_OFFSET_BY_DIRECTION: Record<Direction, Vec3Components> = {
   down: [0, -40, 0],
   left: [-40, 0, 0],
   right: [40, 0, 0],
-};
-
-const TURNER_GLYPH_PATH_BY_VARIANT: Record<TurnerVariant, readonly Point2[]> = {
-  'right-up': [
-    [-20, 10],
-    [-20, -18],
-    [18, -18],
-  ],
-  'right-down': [
-    [-20, -10],
-    [-20, 18],
-    [18, 18],
-  ],
-  'left-up': [
-    [20, 10],
-    [20, -18],
-    [-18, -18],
-  ],
-  'left-down': [
-    [20, -10],
-    [20, 18],
-    [-18, 18],
-  ],
 };
 
 const GRID_FILL_RGBA_BY_ZONE = {
@@ -65,25 +43,9 @@ const PLACEMENT_HIGHLIGHT_PALETTE_BY_STATE = {
   { fill: Rgba; stroke: Rgba }
 >;
 
-const WEAPON_NAME_BY_TYPE: Partial<Record<WeaponType, string>> = {
-  lightning: 'LIGHT',
-};
-
-const SUPPORT_NAME_BY_TYPE: Record<SupportType, string> = {
-  'damage-booster': 'ATK',
-  'gold-booster': 'GOLD',
-  'crit-booster': 'CRIT',
-  'charge-booster': 'CHG',
-};
-
 /** 纯样式映射层，只负责把方向语义转换成渲染偏移。 */
 export function getDirectionOffsetComponents(direction: Direction): [number, number, number] {
   return [...DIRECTION_OFFSET_BY_DIRECTION[direction]];
-}
-
-/** 纯样式映射层，只负责把转向器语义转换成折线路径。 */
-export function getTurnerGlyphPath(variant: TurnerVariant): Point2[] {
-  return TURNER_GLYPH_PATH_BY_VARIANT[variant].map((point) => [...point]);
 }
 
 /** 纯样式映射层，统一返回棋盘格底色，避免在渲染器里散落坐标判断。 */
@@ -106,14 +68,4 @@ export function getPlacementHighlightPalette(
     fill: [...palette.fill],
     stroke: [...palette.stroke],
   };
-}
-
-/** 武器文案映射集中收口，避免个别武器缩写规则散落在渲染层。 */
-export function formatWeaponName(weaponType: WeaponType): string {
-  return WEAPON_NAME_BY_TYPE[weaponType] ?? weaponType.toUpperCase();
-}
-
-/** 辅助实体短名集中收口，供 fallback、调试文本和后续 UI 提示复用。 */
-export function formatSupportName(supportType: SupportType): string {
-  return SUPPORT_NAME_BY_TYPE[supportType];
 }

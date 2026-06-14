@@ -5,7 +5,7 @@ import {
   BoardRuntime,
   createBoardPreset,
   type EntitySpec,
-} from '../assets/scripts/BoardRuntime.ts';
+} from '../assets/scripts/board-runtime/BoardRuntime.ts';
 
 function createRuntime(entities: EntitySpec[]) {
   return new BoardRuntime(createBoardPreset({ entities }));

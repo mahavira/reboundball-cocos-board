@@ -4,6 +4,7 @@ import { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import { BoardRuntime } from '../board-runtime/BoardRuntime.ts';
 import { cloneCoord } from '../shared/helpers.ts';
 import { ShopDragController } from '../shop/ShopDragController.ts';
+import { ShopDragPreviewRenderer } from '../shop/ShopDragPreviewRenderer.ts';
 import {
   getEntityRecycleGoldRefund,
   INITIAL_GOLD_BALANCE,
@@ -93,7 +94,7 @@ export class BoardDragBridge {
       clearPlacementHighlight: () => {
         this.renderer.clearPlacementHighlight();
       },
-      createDragPreview: (item) => BoardRenderer.createDragPreviewNode(this.rootNode, item),
+      createDragPreview: (item) => ShopDragPreviewRenderer.createDragPreviewNode(this.rootNode, item),
       updateDragPreviewPosition: (previewHandle, uiPoint) => {
         this.updateDragPreviewNodePosition(previewHandle, uiPoint);
       },

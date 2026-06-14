@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BoardPathPredictor } from '../assets/scripts/board-prediction/BoardPathPredictor.ts';
-import { BoardRuntime, createBoardPreset, type EntitySpec } from '../assets/scripts/BoardRuntime.ts';
+import { BoardRuntime, createBoardPreset, type EntitySpec } from '../assets/scripts/board-runtime/BoardRuntime.ts';
 
 function createPredictor(entities: EntitySpec[], maxSteps = 32) {
   const runtime = new BoardRuntime(createBoardPreset({ entities }));

@@ -1,9 +1,9 @@
 import { _decorator, Color, Component, EventTouch, Label, Node, Sprite } from 'cc';
 
 import { BoardBootstrap } from '../board-bootstrap/BoardBootstrap.ts';
-import { BoardRenderer } from '../board-renderer/BoardRenderer.ts';
 import { createRandomShopItems } from './ShopItemFactory.ts';
 import { ShopDragController } from './ShopDragController.ts';
+import { ShopItemRenderer } from './ShopItemRenderer.ts';
 import { SHOP_REFRESH_GOLD_COST } from './shop-gold-rules.ts';
 import type {
   BoardShopHost,
@@ -101,7 +101,7 @@ export class ShopLayer extends Component {
   private setSlotItem(slotIndex: number, item: ShopItemDefinition | null): void {
     const slotContext = this.slotContexts[slotIndex];
     slotContext.item = item;
-    BoardRenderer.renderShopItemIcon(slotContext.entityNode, item);
+    ShopItemRenderer.renderShopItemIcon(slotContext.entityNode, item);
     this.updateSlotPriceLabel(slotContext);
     this.updateSlotVisualState(slotContext);
   }

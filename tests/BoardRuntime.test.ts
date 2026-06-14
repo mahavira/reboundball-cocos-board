@@ -5,7 +5,7 @@ import {
   BoardRuntime,
   createBoardPreset,
   type EntitySpec,
-} from '../assets/scripts/BoardRuntime.ts';
+} from '../assets/scripts/board-runtime/BoardRuntime.ts';
 
 /** 测试辅助：创建空实体的 BoardRuntime 实例，可自定义实体列表和步进时长 */
 function createRuntime(options?: {
